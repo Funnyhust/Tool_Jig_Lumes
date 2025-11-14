@@ -11,13 +11,7 @@
 /******************************************************************************/
 /*                              INCLUDE FILES                                 */
 /******************************************************************************/
-#include <stdint.h>
-#include <stdbool.h>
-#include "config_board.h"
-#include "utilities.h"
-
-// Forward declaration
-class UartService;
+#include "../config_board.h"
 /******************************************************************************/
 /*                     EXPORTED TYPES and DEFINITIONS                         */
 /******************************************************************************/
@@ -56,14 +50,15 @@ enum {
 };
 
 
-typedef enum {
+enum m_type_enum{
 	TYPE_CURRENT       = 0,
 	TYPE_VOLTAGE       = 1,
 	TYPE_ACTIVE_POWER  = 2,
 	TYPE_ACTIVE_ENERGY = 3,
 	TYPE_POWER_FACTOR  = 4,
 	TYPE_TEMPERATURE   = 5,
-} m_type_enum;
+};
+typedef u8 m_type_enum;
 
 #define GAIN_1_DEFAULT_VALUE    0x333300
 
@@ -81,24 +76,20 @@ typedef enum {
 
 
 typedef struct {
-	float current[3];      // 3 kênh dòng điện (I1, I2, I3) - đơn vị: mA
-	float voltage;         // Điện áp - đơn vị: V
-	float active_power[3]; // 3 kênh công suất (WATT_1, WATT_2, WATT_3) - đơn vị: W
+	float current;
+	float voltage;
+	float active_power;
 	float active_energy;
 	float power_factor;
 	float temperature;
-	bool voltage_ok=false;
-	bool current_1_ok=false;
-	bool current_2_ok=false;
-	bool current_3_ok=false;
 }measurement_value_t;
 
-typedef void (*p_func_handle)(uint8_t* par, uint8_t par_len);
+typedef void (*p_func_handle)(u8* par, u8 par_len);
 
 typedef struct {
-	uint8_t   id_register;
-    uint8_t   header;
-    uint32_t  active_st_time;
+	u8   id_register;
+    u8   header;
+    u32  active_st_time;
     p_func_handle p_func;
 }bl0906_read_cmd_t;
 
@@ -113,9 +104,9 @@ typedef struct {
 
 typedef struct {
 	bool complete_flag[NUMBER_RL];
-	uint32_t  rmsos[NUMBER_RL];
-	uint32_t  start_time_ms;
-	uint32_t  retry_start_time_ms;
+	u32  rmsos[NUMBER_RL];
+	u32  start_time_ms;
+	u32  retry_start_time_ms;
 	bool is_running;
 }current_correction_par_t;
 
@@ -123,8 +114,8 @@ typedef struct {
 #define SET_GAIN_INTERVAL_MS                 TIMER_5S
 
 typedef struct {
-	uint32_t value;
-	uint32_t set_gain_st_t_ms;
+	u32 value;
+	u32 set_gain_st_t_ms;
 }gain_par_t;
 
 #define BL0906_RX_LEN              4
@@ -140,37 +131,17 @@ typedef void (*typeBl0906_handle_update_energy)(m_type_enum type, float value);
 /******************************************************************************/
 /*                             EXPORT FUNCTIONS                               */
 /******************************************************************************/
-
-// ========== Core Functions ==========
-void bl0906_init(typeBl0906_handle_update_energy func, UartService* uart_service);
-void bl0906_set_uart(UartService* uart_service);  // Set UART tạm thời để đọc từ kênh khác
-void bl0906_set_channel(uint8_t channel);  // Set channel hiện tại (0-3)
-void bl0906_set_debug_uart(UartService* debug_uart);  // Set UART để log debug
-void bl0906_reset_measurements(void);  // Reset giá trị đo của kênh hiện tại về 0
+void bl0906_init(typeBl0906_handle_update_energy func);
+void bl0906_proc(void);
 bool bl0906_is_correction_complete_or_timeout(void);
-void bl0906_proc(void);  // Hàm xử lý định kỳ (auto-recovery gain)
-
-// ========== Read/Write Register Functions ==========
-void bl0906_send_get_current(void);  // Đọc 3 kênh current (I1, I2, I3)
+void bl0906_handle_serial_rx_message(u8* buff, u8 len);
+void bl0906_send_get_current(void);
 void bl0906_get_voltage(void);
 void bl0906_get_active_power(void);
 void bl0906_get_active_energy(void);
 void bl0906_get_power_factor(void);
 void bl0906_get_temperature(void);
-void bl0906_measurenment_start(uint16_t m_mask);
-void bl_0906_set_gain(uint32_t gain);  // Set gain register (ví dụ: 0x333300 hoặc 16)
 
-// ========== Getter Functions - Lấy giá trị đo được ==========
-float bl0906_get_current_value(uint8_t channel);  // channel: 0=I1, 1=I2, 2=I3
-float bl0906_get_voltage_value(void);
-float bl0906_get_active_power_value(uint8_t channel);  // channel: 0=WATT_1, 1=WATT_2, 2=WATT_3
-float bl0906_get_active_energy_value(void);
-float bl0906_get_power_factor_value(void);
-float bl0906_get_temperature_value(void);
-measurement_value_t bl0906_get_all_measurements(void);
-
-// ========== SYNC (Blocking) Functions - Mới thêm ==========
-bool bl0906_read_register_sync(uint8_t address, uint8_t* rx_data, uint32_t timeout_ms);
-uint32_t bl0906_read_register_sync_u24(uint8_t address, uint32_t timeout_ms);
+void bl0906_measurenment_start(u16 m_mask);
 
 #endif /* BL0906_H_ */

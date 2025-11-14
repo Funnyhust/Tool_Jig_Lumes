@@ -43,10 +43,14 @@ void RelayService::setRelayIndex(uint8_t idRelay, uint8_t setRelay) {
     if (idRelay >= NUM_RELAYS) return;
     
     uint8_t arduinoPin = GPIO_TO_ARDUINO_PIN(_relayMap[idRelay].port, _relayMap[idRelay].pin);
-    digitalWrite(arduinoPin, setRelay ? HIGH : LOW);
+    analogWrite(arduinoPin, setRelay ? 200 : 50);
     _relayStates[idRelay] = (setRelay != 0);
 }
 
+void RelayService::setRelayState(uint8_t idRelay, bool state) {
+    if (idRelay >= NUM_RELAYS) return;
+    setRelayIndex(idRelay, state ? 1 : 0);
+}
 void RelayService::turnOn(uint8_t idRelay) {
     setRelayIndex(idRelay, 1);
 }

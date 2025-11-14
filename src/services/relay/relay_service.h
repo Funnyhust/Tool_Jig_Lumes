@@ -32,6 +32,7 @@ class RelayService {
 public:
     void init();
     void setRelayIndex(uint8_t idRelay, uint8_t setRelay);
+    void setRelayState(uint8_t idRelay, bool state);
     void turnOn(uint8_t idRelay);
     void turnOff(uint8_t idRelay);
     void toggle(uint8_t idRelay);
