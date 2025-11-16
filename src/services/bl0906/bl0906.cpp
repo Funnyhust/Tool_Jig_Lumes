@@ -18,7 +18,9 @@
 // Debug macros - in ra Serial5
 #define BL0906_DBG_EN true
 #ifdef  BL0906_DBG_EN
-	#define DBG_BL0906_SEND_STR(x)     do { if (Serial5) Serial5.print(x); } while(0)
+	#define DBG_BL0906_SEND_STR(x)          do { if (Serial5) Serial5.print(x); } while(0)
+	#define DBG_BL0906_SEND_STR_INFO(x)     do { if (Serial5) Serial5.print(x); } while(0)
+	#define DBG_BL0906_SEND_STR_ERROR(x)    do { if (Serial5) {Serial5.print("[ERROR]");   Serial5.print(x);} } while(0)
 	#define DBG_BL0906_SEND_INT(x)     do { if (Serial5) Serial5.print(x); } while(0)
 	#define DBG_BL0906_SEND_HEX(x)     do { if (Serial5) { Serial5.print("0x"); Serial5.print(x, HEX); } } while(0)
 	#define DBG_BL0906_SEND_BYTE(x)    do { if (Serial5) { Serial5.print("0x"); if (x < 0x10) Serial5.print("0"); Serial5.print(x, HEX); } } while(0)
@@ -269,11 +271,11 @@ static void bl0906_handle_current_rsp(uint8_t* par, uint8_t par_len)
 	uint32_t data = array_to_u24(par);
 	
 	// Debug: Log raw data trước khi tính toán
-	if (p_debug_uart != NULL) {
-		char buf[100];
-		snprintf(buf, sizeof(buf), "BL0906: Current raw data=0x%06lX (%lu)", data, data);
-		p_debug_uart->logInfo(buf);
-	}
+	DBG_BL0906_SEND_STR_INFO("BL0906: Current raw data=");
+	DBG_BL0906_SEND_HEX32(data);
+	DBG_BL0906_SEND_STR_INFO(" (");
+	DBG_Bl0906_SEND_DWORD(data);
+	DBG_BL0906_SEND_STR_INFO(")");
 	
 	// Tính toán dòng điện
 	// Công thức: I = data * Vref / (12875 * Rl * Gain_i)
@@ -300,33 +302,28 @@ static void bl0906_handle_current_rsp(uint8_t* par, uint8_t par_len)
 	}
 	
 	// Debug: Log giá trị tính được
-	if (p_debug_uart != NULL) {
-		char buf[200];
-		float vref_val = Vref;
-		float rl_val = Rl;
-		int gain_i_val = Gain_i;
-		
-		// Log raw data
-		snprintf(buf, sizeof(buf), "BL0906: Current[%d] raw data=0x%06lX (%lu)", index, data, data);
-		p_debug_uart->logInfo(buf);
-		
-		snprintf(buf, sizeof(buf), "BL0906: Current[%d] calc: data=%lu", index, data);
-		p_debug_uart->logInfo(buf);
-		// Ép kiểu float sang int để in (nhân 1000 để giữ 3 chữ số thập phân)
-		snprintf(buf, sizeof(buf), "BL0906: Vref=%d, Rl=%d, Gain_i=%d", 
-		         (int)(vref_val * 1000), (int)(rl_val * 1000), gain_i_val);
-		p_debug_uart->logInfo(buf);
-		
-		float denominator_calc = 12875.0f * rl_val * gain_i_val;
-		float numerator_calc = (float)data * vref_val;
-		// Ép kiểu float sang int (nhân 100 để giữ 2 chữ số thập phân)
-		snprintf(buf, sizeof(buf), "BL0906: num=%ld, den=%ld", 
-		         (long)(numerator_calc * 100), (long)(denominator_calc * 100));
-		p_debug_uart->logInfo(buf);
-		// Ép kiểu float sang int (nhân 1000 để giữ 3 chữ số thập phân)
-		snprintf(buf, sizeof(buf), "BL0906: Current[%d] result = %d mA", index, (int)(current_ma * 1000));
-		p_debug_uart->logInfo(buf);
-	}
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Current[");
+	DBG_BL0906_SEND_INT(index);
+	DBG_BL0906_SEND_STR_INFO("] raw data=");
+	DBG_BL0906_SEND_HEX32(data);
+	DBG_BL0906_SEND_STR_INFO(" (");
+	DBG_Bl0906_SEND_DWORD(data);
+	DBG_BL0906_SEND_STR_INFO(")");
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Current[");
+	DBG_BL0906_SEND_INT(index);
+	DBG_BL0906_SEND_STR_INFO("] calc: data=");
+	DBG_Bl0906_SEND_DWORD(data);
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Vref=");
+	DBG_Bl0906_SEND_FLOAT(Vref);
+	DBG_BL0906_SEND_STR_INFO(", Rl=");
+	DBG_Bl0906_SEND_FLOAT(Rl);
+	DBG_BL0906_SEND_STR_INFO(", Gain_i=");
+	DBG_BL0906_SEND_INT(Gain_i);
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Current[");
+	DBG_BL0906_SEND_INT(index);
+	DBG_BL0906_SEND_STR_INFO("] result = ");
+	DBG_Bl0906_SEND_FLOAT(current_ma);
+	DBG_BL0906_SEND_STR_INFO(" mA");
 	
 	// Lưu giá trị vào mảng theo index và channel hiện tại
 	measurement_values[current_channel].current[index] = current_ma;
@@ -404,11 +401,11 @@ static void bl0906_handle_voltage_rsp(uint8_t* par, uint8_t par_len)
 	uint32_t data = array_to_u24(par);
 	
 	// Debug: Log raw data trước khi tính toán
-	if (p_debug_uart != NULL) {
-		char buf[100];
-		snprintf(buf, sizeof(buf), "BL0906: Voltage raw data=0x%06lX (%lu)", data, data);
-		p_debug_uart->logInfo(buf);
-	}
+	DBG_BL0906_SEND_STR_INFO("BL0906: Voltage raw data=");
+	DBG_BL0906_SEND_HEX32(data);
+	DBG_BL0906_SEND_STR_INFO(" (");
+	DBG_Bl0906_SEND_DWORD(data);
+	DBG_BL0906_SEND_STR_INFO(")");
 	
 	// Tính toán điện áp
 	// Công thức: V = data * Vref * (Rf + Rv) / (13162 * Rv * Gain_v * 1000)
@@ -416,33 +413,24 @@ static void bl0906_handle_voltage_rsp(uint8_t* par, uint8_t par_len)
 	measurement_values[current_channel].voltage = voltage_calc;
 	
 	// Debug: Log các giá trị trung gian
-	if (p_debug_uart != NULL) {
-		char buf[200];
-		float vref_val = Vref;
-		float rf_val = Rf;
-		float rv_val = Rv;
-		float gain_v_val = Gain_v;
-		float rf_plus_rv = rf_val + rv_val;
-		float numerator = (float)data * vref_val * rf_plus_rv;
-		float denominator = 13162.0f * rv_val * gain_v_val * 1000.0f;
-		
-		// Log raw data
-		snprintf(buf, sizeof(buf), "BL0906: Voltage raw data=0x%06lX (%lu)", data, data);
-		p_debug_uart->logInfo(buf);
-		
-		snprintf(buf, sizeof(buf), "BL0906: Voltage calc: data=%lu", data);
-		p_debug_uart->logInfo(buf);
-		// Ép kiểu float sang int để in
-		snprintf(buf, sizeof(buf), "BL0906: Vref=%d, Rf=%d, Rv=%d, Gain_v=%d", 
-		         (int)(vref_val * 1000), (int)rf_val, (int)rv_val, (int)gain_v_val);
-		p_debug_uart->logInfo(buf);
-		snprintf(buf, sizeof(buf), "BL0906: Rf+Rv=%d, num=%ld, den=%ld", 
-		         (int)rf_plus_rv, (long)(numerator * 100), (long)(denominator * 100));
-		p_debug_uart->logInfo(buf);
-		// Ép kiểu float sang int (nhân 1000 để giữ 3 chữ số thập phân)
-		snprintf(buf, sizeof(buf), "BL0906: Voltage result = %d V", (int)(voltage_calc * 1000));
-		p_debug_uart->logInfo(buf);
-	}
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Voltage raw data=");
+	DBG_BL0906_SEND_HEX32(data);
+	DBG_BL0906_SEND_STR_INFO(" (");
+	DBG_Bl0906_SEND_DWORD(data);
+	DBG_BL0906_SEND_STR_INFO(")");
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Voltage calc: data=");
+	DBG_Bl0906_SEND_DWORD(data);
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Vref=");
+	DBG_Bl0906_SEND_FLOAT(Vref);
+	DBG_BL0906_SEND_STR_INFO(", Rf=");
+	DBG_Bl0906_SEND_FLOAT(Rf);
+	DBG_BL0906_SEND_STR_INFO(", Rv=");
+	DBG_Bl0906_SEND_FLOAT(Rv);
+	DBG_BL0906_SEND_STR_INFO(", Gain_v=");
+	DBG_Bl0906_SEND_FLOAT(Gain_v);
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Voltage result = ");
+	DBG_Bl0906_SEND_FLOAT(voltage_calc);
+	DBG_BL0906_SEND_STR_INFO(" V");
 	
 	bl0906_update_energy(TYPE_VOLTAGE, measurement_values[current_channel].voltage);
 	DBG_BL0906_SEND_STR("\n __VOLTAGE__:");
@@ -598,9 +586,11 @@ static void bl0906_current_correction_proc(void)
  */
 static void bl0906_set_gain_proc(void)
 {
-	Serial5.println("bl0906_set_gain_proc");
-	Serial5.println(gain_par.value);
-	Serial5.println(GAIN_1_DEFAULT_VALUE);
+	DBG_BL0906_SEND_STR_INFO("\nbl0906_set_gain_proc");
+	DBG_BL0906_SEND_STR_INFO("\ngain_par.value=");
+	DBG_Bl0906_SEND_DWORD(gain_par.value);
+	DBG_BL0906_SEND_STR_INFO("\nGAIN_1_DEFAULT_VALUE=");
+	DBG_Bl0906_SEND_DWORD(GAIN_1_DEFAULT_VALUE);
 	if(gain_par.value != GAIN_1_DEFAULT_VALUE) {
 		if(clock_time_exceed_ms(gain_par.set_gain_st_t_ms, SET_GAIN_INTERVAL_MS)) {
 			bl_0906_set_gain(GAIN_1_DEFAULT_VALUE);
@@ -692,15 +682,15 @@ static void bl0906_read_register(uint8_t address)
 	serial->flush(); // Đảm bảo dữ liệu đã được gửi
 	
 	// Log raw data gửi đi (debug)
-	if (p_debug_uart != NULL) {
-		char buf[80];
-		snprintf(buf, sizeof(buf), "BL0906: TX [0x%02X 0x%02X] reg=0x%02X", 
-		         tx_data[0], tx_data[1], address);
-		p_debug_uart->logInfo(buf);
-	}
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: TX [");
+	DBG_BL0906_SEND_BYTE(tx_data[0]);
+	DBG_BL0906_SEND_STR_INFO(" ");
+	DBG_BL0906_SEND_BYTE(tx_data[1]);
+	DBG_BL0906_SEND_STR_INFO("] reg=");
+	DBG_BL0906_SEND_BYTE(address);
 	
 	// Đợi một chút để thiết bị có thời gian phản hồi
-	delay(10); // Tăng delay lên 50ms
+	delay(5); 
 	
 	// Đợi cho đến khi có đủ bytes trong buffer hoặc timeout
 	uint32_t start_time = millis();
@@ -709,24 +699,23 @@ static void bl0906_read_register(uint8_t address)
 	while ((available_bytes = serial->available()) < BL0906_RX_LEN) {
 		if ((millis() - start_time) >= timeout_ms) {
 			// Timeout - log để debug
-			DBG_BL0906_SEND_STR("\n Read timeout - no response");
-			// Log qua debug UART nếu có
-			if (p_debug_uart != NULL) {
-				char buf[80];
-				snprintf(buf, sizeof(buf), "BL0906: Timeout reading reg 0x%02X (got %d bytes, waited %lu ms)", 
-				         address, available_bytes, (millis() - start_time));
-				p_debug_uart->logError(buf);
-				// Log bất kỳ dữ liệu nào đã nhận được
-				if (available_bytes > 0) {
-					uint8_t partial[10];
-					uint8_t partial_read = serial->readBytes(partial, available_bytes);
-					snprintf(buf, sizeof(buf), "BL0906: Partial RX [%d bytes]: ", partial_read);
-					p_debug_uart->logError(buf);
-					for (uint8_t i = 0; i < partial_read; i++) {
-						char hex_buf[10];
-						snprintf(hex_buf, sizeof(hex_buf), "0x%02X ", partial[i]);
-						p_debug_uart->logError(hex_buf);
-					}
+			DBG_BL0906_SEND_STR_ERROR("\nBL0906: Timeout reading reg ");
+			DBG_BL0906_SEND_BYTE(address);
+			DBG_BL0906_SEND_STR_ERROR(" (got ");
+			DBG_BL0906_SEND_INT(available_bytes);
+			DBG_BL0906_SEND_STR_ERROR(" bytes, waited ");
+			DBG_Bl0906_SEND_DWORD(millis() - start_time);
+			DBG_BL0906_SEND_STR_ERROR(" ms)");
+			// Log bất kỳ dữ liệu nào đã nhận được
+			if (available_bytes > 0) {
+				uint8_t partial[10];
+				uint8_t partial_read = serial->readBytes(partial, available_bytes);
+				DBG_BL0906_SEND_STR_ERROR("\nBL0906: Partial RX [");
+				DBG_BL0906_SEND_INT(partial_read);
+				DBG_BL0906_SEND_STR_ERROR(" bytes]: ");
+				for (uint8_t i = 0; i < partial_read; i++) {
+					DBG_BL0906_SEND_BYTE(partial[i]);
+					DBG_BL0906_SEND_STR_ERROR(" ");
 				}
 			}
 			return;
@@ -739,22 +728,23 @@ static void bl0906_read_register(uint8_t address)
 	uint8_t bytes_read = serial->readBytes(rx_data, BL0906_RX_LEN);
 	
 	// Log raw data nhận được (debug)
-	if (p_debug_uart != NULL) {
-		char buf[100];
-		snprintf(buf, sizeof(buf), "BL0906: RX [%d bytes]: 0x%02X 0x%02X 0x%02X 0x%02X", 
-		         bytes_read, rx_data[0], rx_data[1], rx_data[2], rx_data[3]);
-		p_debug_uart->logInfo(buf);
-	}
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: RX [");
+	DBG_BL0906_SEND_INT(bytes_read);
+	DBG_BL0906_SEND_STR_INFO(" bytes]: ");
+	DBG_BL0906_SEND_BYTE(rx_data[0]);
+	DBG_BL0906_SEND_STR_INFO(" ");
+	DBG_BL0906_SEND_BYTE(rx_data[1]);
+	DBG_BL0906_SEND_STR_INFO(" ");
+	DBG_BL0906_SEND_BYTE(rx_data[2]);
+	DBG_BL0906_SEND_STR_INFO(" ");
+	DBG_BL0906_SEND_BYTE(rx_data[3]);
 	
 	if (bytes_read != BL0906_RX_LEN) {
 		// Không đủ dữ liệu (không nên xảy ra vì đã kiểm tra available)
-		DBG_BL0906_SEND_STR("\n Read incomplete data: ");
+		DBG_BL0906_SEND_STR_ERROR("\nBL0906: Incomplete data - expected ");
+		DBG_BL0906_SEND_INT(BL0906_RX_LEN);
+		DBG_BL0906_SEND_STR_ERROR(", got ");
 		DBG_BL0906_SEND_INT(bytes_read);
-		if (p_debug_uart != NULL) {
-			char buf[60];
-			snprintf(buf, sizeof(buf), "BL0906: Incomplete data - expected %d, got %d", BL0906_RX_LEN, bytes_read);
-			p_debug_uart->logError(buf);
-		}
 		return;
 	}
 	
@@ -767,17 +757,13 @@ static void bl0906_read_register(uint8_t address)
 	
 	if(checksum != rx_data[BL0906_RX_LEN - 1]) {
 		// Checksum sai - log để debug
-		DBG_BL0906_SEND_STR("\n Checksum error: calc=");
+		DBG_BL0906_SEND_STR_ERROR("\nBL0906: Checksum error reg ");
+		DBG_BL0906_SEND_BYTE(address);
+		DBG_BL0906_SEND_STR_ERROR(" (calc=");
 		DBG_BL0906_SEND_BYTE(checksum);
-		DBG_BL0906_SEND_STR(" recv=");
+		DBG_BL0906_SEND_STR_ERROR(" recv=");
 		DBG_BL0906_SEND_BYTE(rx_data[BL0906_RX_LEN - 1]);
-		// Log qua debug UART nếu có
-		if (p_debug_uart != NULL) {
-			char buf[80];
-			snprintf(buf, sizeof(buf), "BL0906: Checksum error reg 0x%02X (calc=0x%02X recv=0x%02X)", 
-			         address, checksum, rx_data[BL0906_RX_LEN - 1]);
-			p_debug_uart->logError(buf);
-		}
+		DBG_BL0906_SEND_STR_ERROR(")");
 		return;
 	}
 	
@@ -837,32 +823,32 @@ static void bl0906_read_register(uint8_t address)
 		cmd_is_running_register = REG_UNKNOWN;
 		
 		// Log sau khi xử lý để debug
-		if (p_debug_uart != NULL) {
-			char buf[100];
-			uint32_t data_value = array_to_u24(rx_data);
-			snprintf(buf, sizeof(buf), "BL0906: Processed reg 0x%02X, data=0x%06lX (%lu)", 
-			         address, data_value, data_value);
-			p_debug_uart->logInfo(buf);
-			
-			// Log giá trị đã lưu tùy theo register (ép kiểu float sang int)
-			if (address == I1_RMS || address == I2_RMS || address == I3_RMS) {
-				uint8_t idx = (address == I1_RMS) ? 0 : (address == I2_RMS) ? 1 : 2;
-				// Nhân 100 để giữ 2 chữ số thập phân
-				snprintf(buf, sizeof(buf), "BL0906: Current[%d] = %d mA", idx, (int)(measurement_values[current_channel].current[idx] * 1000));
-				p_debug_uart->logInfo(buf);
-			} else if (address == V_RMS) {
-				// Nhân 100 để giữ 2 chữ số thập phân
-				snprintf(buf, sizeof(buf), "BL0906: Voltage = %d V", (int)(measurement_values[current_channel].voltage));
-				p_debug_uart->logInfo(buf);
-			}
+		uint32_t data_value = array_to_u24(rx_data);
+		DBG_BL0906_SEND_STR_INFO("\nBL0906: Processed reg ");
+		DBG_BL0906_SEND_BYTE(address);
+		DBG_BL0906_SEND_STR_INFO(", data=");
+		DBG_BL0906_SEND_HEX32(data_value);
+		DBG_BL0906_SEND_STR_INFO(" (");
+		DBG_Bl0906_SEND_DWORD(data_value);
+		DBG_BL0906_SEND_STR_INFO(")");
+		
+		// Log giá trị đã lưu tùy theo register
+		if (address == I1_RMS || address == I2_RMS || address == I3_RMS) {
+			uint8_t idx = (address == I1_RMS) ? 0 : (address == I2_RMS) ? 1 : 2;
+			DBG_BL0906_SEND_STR_INFO("\nBL0906: Current[");
+			DBG_BL0906_SEND_INT(idx);
+			DBG_BL0906_SEND_STR_INFO("] = ");
+			DBG_Bl0906_SEND_FLOAT(measurement_values[current_channel].current[idx]);
+			DBG_BL0906_SEND_STR_INFO(" mA");
+		} else if (address == V_RMS) {
+			DBG_BL0906_SEND_STR_INFO("\nBL0906: Voltage = ");
+			DBG_Bl0906_SEND_FLOAT(measurement_values[current_channel].voltage);
+			DBG_BL0906_SEND_STR_INFO(" V");
 		}
 	} else {
 		// Không có handler cho register này
-		if (p_debug_uart != NULL) {
-			char buf[60];
-			snprintf(buf, sizeof(buf), "BL0906: No handler for reg 0x%02X", address);
-			p_debug_uart->logError(buf);
-		}
+		DBG_BL0906_SEND_STR_ERROR("\nBL0906: No handler for reg ");
+		DBG_BL0906_SEND_BYTE(address);
 	}
 }
 

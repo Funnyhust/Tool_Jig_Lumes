@@ -33,7 +33,6 @@ void setup() {
     // Khởi tạo LED pin
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
-    
     relayService.init();
     process_init();
 }

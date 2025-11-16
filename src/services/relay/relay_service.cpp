@@ -39,45 +39,55 @@ void RelayService::init() {
     }
 }
 
+
 void RelayService::setRelayIndex(uint8_t idRelay, uint8_t setRelay) {
     if (idRelay >= NUM_RELAYS) return;
-    
     uint8_t arduinoPin = GPIO_TO_ARDUINO_PIN(_relayMap[idRelay].port, _relayMap[idRelay].pin);
-    analogWrite(arduinoPin, setRelay ? 200 : 50);
+    digitalWrite(arduinoPin, setRelay ? HIGH : LOW);
     _relayStates[idRelay] = (setRelay != 0);
 }
+
+
 
 void RelayService::setRelayState(uint8_t idRelay, bool state) {
     if (idRelay >= NUM_RELAYS) return;
     setRelayIndex(idRelay, state ? 1 : 0);
 }
+
 void RelayService::turnOn(uint8_t idRelay) {
     setRelayIndex(idRelay, 1);
 }
 
+
 void RelayService::turnOff(uint8_t idRelay) {
     setRelayIndex(idRelay, 0);
 }
+
 
 void RelayService::toggle(uint8_t idRelay) {
     if (idRelay >= NUM_RELAYS) return;
     setRelayIndex(idRelay, !_relayStates[idRelay]);
 }
 
+
 bool RelayService::isOn(uint8_t idRelay) const {
     if (idRelay >= NUM_RELAYS) return false;
     return _relayStates[idRelay];
     }
+
 void RelayService::turnOnAll() {
     for (uint8_t i = 0; i < NUM_RELAYS; i++) {
         turnOn(i);
     }
 }
+
 void RelayService::turnOffAll() {
     for (uint8_t i = 0; i < NUM_RELAYS; i++) {
         turnOff(i);
     }
 }
+
+
 void RelayService::testFullRelay() {
     turnOnAll();
     delay(1000);

@@ -97,39 +97,14 @@ static void read_bl0906_channel(int channel, UartService* uart)
     // Set UART và channel cho bl0906
     bl0906_set_uart(uart);
     bl0906_set_channel(channel);  // Set channel trước khi đọc (sẽ tự động reset giá trị)
-    
     // Đọc giá trị
     bl0906_send_get_current();
-    delayWithBlink(200); // Đợi đọc xong (3 lần đọc current) - blink LED trong lúc đợi
+    //delayWithBlink(200); // Đợi đọc xong (3 lần đọc current) - blink LED trong lúc đợi
     bl0906_get_voltage();
-    delayWithBlink(50);  // Blink LED trong lúc đợi
+    //delayWithBlink(50);  // Blink LED trong lúc đợi
     bl0906_get_active_power();
-    delayWithBlink(50);  // Blink LED trong lúc đợi
-    
     // Lưu giá trị vào mảng của kênh này ngay sau khi đọc
     channel_measurements[channel] = bl0906_get_all_measurements();
-    
-    // Log giá trị từ mảng đã lưu
-    char buffer[80];
-    snprintf(buffer, sizeof(buffer), "=== BL0906_%d (Serial%d) ===", channel+1, channel+1);
-    uartDebug->logInfo(buffer);
-    uartDebug->logInfo("Dong dien 3 kenh: ");
-    // Ép kiểu float sang int để in 
-    snprintf(buffer, sizeof(buffer), "I1: %d mA", (int)(channel_measurements[channel].current[0] ));
-    uartDebug->logInfo(buffer);
-    snprintf(buffer, sizeof(buffer), "I2: %d mA", (int)(channel_measurements[channel].current[1] ));
-    uartDebug->logInfo(buffer);
-    snprintf(buffer, sizeof(buffer), "I3: %d mA", (int)(channel_measurements[channel].current[2] ));
-    uartDebug->logInfo(buffer);
-    // Ép kiểu float sang int để in 
-    snprintf(buffer, sizeof(buffer), "Dien ap: %d V", (int)(channel_measurements[channel].voltage ));
-    uartDebug->logInfo(buffer);
-    snprintf(buffer, sizeof(buffer), "Cong suat: %d W", (int)(channel_measurements[channel].active_power[0] ));
-    uartDebug->logInfo(buffer);
-    snprintf(buffer, sizeof(buffer), "Cong suat: %d W", (int)(channel_measurements[channel].active_power[1] ));
-    uartDebug->logInfo(buffer);
-    snprintf(buffer, sizeof(buffer), "Cong suat: %d W", (int)(channel_measurements[channel].active_power[2] ));
-    uartDebug->logInfo(buffer);
 }
 
 // Khai báo biến điều khiển LED từ main.cpp
@@ -140,16 +115,14 @@ void start_process(void)
   // turn on all relay
    uint32_t start_time_ms = millis();
    relayService.turnOnAll();
-   delayWithBlink(100);
+   delayWithBlink(200);
    // Bật blink LED
    ledBlinkEnable = true;
    
-   // Gọi bl0906_proc() để kiểm tra và auto-recovery gain nếu cần
    for (int i = 0; i < 4; i++) {
        if (uartBl0906[i] != NULL) {
            bl0906_set_uart(uartBl0906[i]);
            bl0906_set_channel(i);
-        //bl0906_proc();  // Kiểm tra và set gain về 16 nếu cần
        }
    }
    
@@ -157,19 +130,18 @@ void start_process(void)
    for (int i = 0; i < 4; i++) {
        if (uartBl0906[i] != NULL) {
            read_bl0906_channel(i, uartBl0906[i]);
-           // Kiểm tra và set các flag OK
        }
    }
    
    // Đợi 3 giây (LED sẽ blink trong lúc này)
-   delayWithBlink(1000);
-   
+    while (millis() - start_time_ms < 3000) {
+         delayWithBlink(100);
+    }
    // Tắt blink LED
    ledBlinkEnable = false;
    
    for (int i = 0; i < 4; i++) {
     is_channel_pass(i);
-
     relayService.setRelayState(i*3, channel_measurements[i].current_1_ok);
     relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok);
     relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok);
