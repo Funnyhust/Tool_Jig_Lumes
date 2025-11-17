@@ -36,15 +36,6 @@ static void is_channel_pass(int channel)
     channel_measurements[channel].current_3_ok = (current_3 >= CURRENT_THRESHOLD_LOW && current_3 <= CURRENT_THRESHOLD_HIGH);
 }
 
-static bool _voltage_ok = false;
-static bool _current_1_ok = false;
-static bool _active_power_ok = false;
-
-static uint16_t _voltage_value = 0;
-static uint16_t _current_value_1 = 0;
-static uint16_t _current_value_2 = 0;
-static uint16_t _current_value_3 = 0;
-static uint16_t _active_power_value = 0;
 
 
 
@@ -81,6 +72,10 @@ void process_init(void)
     for (int i = 0; i < 4; i++) {
         if (uartBl0906[i] != NULL) {
             bl0906_init(NULL, uartBl0906[i]);
+            // Set channel và xử lý gain cho kênh này
+            bl0906_set_channel(i);
+            bl0906_proc();  // Kiểm tra và set gain cho kênh này
+            delayWithBlink(100);  // Đợi xử lý xong - blink LED
         }
     }
 }
@@ -97,14 +92,44 @@ static void read_bl0906_channel(int channel, UartService* uart)
     // Set UART và channel cho bl0906
     bl0906_set_uart(uart);
     bl0906_set_channel(channel);  // Set channel trước khi đọc (sẽ tự động reset giá trị)
+    
+    // Kiểm tra và set gain cho kênh này (đảm bảo gain đúng trước khi đọc)
+    bl0906_proc();
+    delayWithBlink(10);  // Đợi xử lý gain xong - blink LED
+    
     // Đọc giá trị
     bl0906_send_get_current();
-    //delayWithBlink(200); // Đợi đọc xong (3 lần đọc current) - blink LED trong lúc đợi
+    delayWithBlink(20); // Đợi đọc xong (3 lần đọc current) - blink LED trong lúc đợi
     bl0906_get_voltage();
-    //delayWithBlink(50);  // Blink LED trong lúc đợi
+    delayWithBlink(10);  // Blink LED trong lúc đợi
     bl0906_get_active_power();
+    delayWithBlink(10);  // Blink LED trong lúc đợi
     // Lưu giá trị vào mảng của kênh này ngay sau khi đọc
     channel_measurements[channel] = bl0906_get_all_measurements();
+    
+    //Logging giá trị đo được bằng serial5 (chia nhỏ để không block LED blink)
+    Serial5.print("Channel: ");
+    Serial5.println(channel);
+    Serial5.print("Voltage: ");
+    Serial5.println(channel_measurements[channel].voltage);
+    delayWithBlink(10);
+    Serial5.print("Current[0]: ");  
+    Serial5.println(channel_measurements[channel].current[0]);
+    delayWithBlink(10);
+    Serial5.print("Current[1]: ");
+    Serial5.println(channel_measurements[channel].current[1]);
+    Serial5.print("Current[2]: ");
+    Serial5.println(channel_measurements[channel].current[2]);
+    delayWithBlink(10);
+    Serial5.print("Active Power[0]: ");
+    Serial5.println(channel_measurements[channel].active_power[0]);
+    Serial5.print("Active Power[1]: ");
+    Serial5.println(channel_measurements[channel].active_power[1]);
+    delayWithBlink(10);
+    Serial5.print("Active Power[2]: ");
+    Serial5.println(channel_measurements[channel].active_power[2]);
+    delayWithBlink(10);
+    Serial5.println("--------------------------------");
 }
 
 // Khai báo biến điều khiển LED từ main.cpp
@@ -115,7 +140,7 @@ void start_process(void)
   // turn on all relay
    uint32_t start_time_ms = millis();
    relayService.turnOnAll();
-   delayWithBlink(200);
+   delayWithBlink(500);
    // Bật blink LED
    ledBlinkEnable = true;
    
@@ -135,7 +160,7 @@ void start_process(void)
    
    // Đợi 3 giây (LED sẽ blink trong lúc này)
     while (millis() - start_time_ms < 3000) {
-         delayWithBlink(100);
+         delayWithBlink(200);
     }
    // Tắt blink LED
    ledBlinkEnable = false;

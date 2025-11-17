@@ -158,7 +158,7 @@ void bl0906_get_active_energy(void);
 void bl0906_get_power_factor(void);
 void bl0906_get_temperature(void);
 void bl0906_measurenment_start(uint16_t m_mask);
-void bl_0906_set_gain(uint32_t gain);  // Set gain register (ví dụ: 0x333300 hoặc 16)
+void bl_0906_set_gain(uint32_t gain, UartService* uart_service = NULL);  // Set gain register cho kênh cụ thể (NULL = dùng UART hiện tại)
 
 // ========== Getter Functions - Lấy giá trị đo được ==========
 float bl0906_get_current_value(uint8_t channel);  // channel: 0=I1, 1=I2, 2=I3

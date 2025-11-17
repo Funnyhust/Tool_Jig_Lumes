@@ -2,6 +2,7 @@
 #include <HardwareSerial.h>
 #include "services/relay/relay_service.h"
 #include "app/process.h"
+#include "services/zero_detect/zero_detect.h"
 
 RelayService relayService;
 
@@ -35,10 +36,14 @@ void setup() {
     digitalWrite(LED_PIN, LOW);
     relayService.init();
     process_init();
+    ledBlinkEnable = true;
+    start_process();
+    ledBlinkEnable = false;
+    zero_detect_init();
+    zero_detect_process();
 }
 
 void loop() {
-    start_process();
-    digitalWrite(LED_PIN, LOW);
-    delay(2000);
+    // Blink LED trong lúc chờ giữa các lần test
+
 }

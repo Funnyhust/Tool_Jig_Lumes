@@ -16,7 +16,7 @@
 #include "utilities.h"
 #include "../uart/uart_service.h"
 // Debug macros - in ra Serial5
-#define BL0906_DBG_EN true
+//#define BL0906_DBG_EN false
 #ifdef  BL0906_DBG_EN
 	#define DBG_BL0906_SEND_STR(x)          do { if (Serial5) Serial5.print(x); } while(0)
 	#define DBG_BL0906_SEND_STR_INFO(x)     do { if (Serial5) Serial5.print(x); } while(0)
@@ -29,7 +29,9 @@
     #define DBG_Bl0906_SEND_FLOAT(x)   do { if (Serial5) Serial5.print(x, 3); } while(0)
 #else
 	#define DBG_BL0906_SEND_STR(x)
-	#define DBG_BL0906_SEND_INT(x)
+    #define DBG_BL0906_SEND_STR_INFO(x)
+    #define DBG_BL0906_SEND_STR_ERROR(x)
+    #define DBG_BL0906_SEND_INT(x)
 	#define DBG_BL0906_SEND_HEX(x)
 	#define DBG_BL0906_SEND_BYTE(x)
     #define DBG_BL0906_SEND_HEX32(x)
@@ -61,7 +63,12 @@ bool manual_rx_flag = false;
 uint8_t manual_rx_data[4] = { 0, 0, 0, 0 };
 
 static current_correction_par_t  current_correction_par;
-static gain_par_t gain_par = { .value = 0, .set_gain_st_t_ms = 0 };
+static gain_par_t gain_par[4] = {  // Mảng gain_par cho 4 kênh
+	{ .value = 0, .set_gain_st_t_ms = 0 },
+	{ .value = 0, .set_gain_st_t_ms = 0 },
+	{ .value = 0, .set_gain_st_t_ms = 0 },
+	{ .value = 0, .set_gain_st_t_ms = 0 }
+};
 
 // ========== SYNC (Blocking) Variables ==========
 static bool sync_read_waiting = false;
@@ -72,7 +79,7 @@ static bool sync_read_success = false;
 /******************************************************************************/
 /*                             PRIVATE FUNCS                                  */
 /******************************************************************************/
-static bool bl0906_write_register(uint8_t address, uint32_t data);
+static bool bl0906_write_register(uint8_t address, uint32_t data, UartService* uart_service);
 static void bl0906_read_register(uint8_t address);
 static void bl0906_set_gain_proc(void);  // Forward declaration
 
@@ -97,13 +104,14 @@ void bl0906_handdle_rx_manual(uint8_t* buff, uint8_t len)
 
 /**
  * @func    bl_0906_set_gain
- * @brief
- * @param
+ * @brief   Set gain register cho BL0906
+ * @param   gain: Giá trị gain (ví dụ: 0x333300 hoặc 16)
+ * @param   uart_service: UART service của kênh cần set (NULL = dùng UART hiện tại)
  * @retval  None
  */
-void bl_0906_set_gain(uint32_t gain)
+void bl_0906_set_gain(uint32_t gain, UartService* uart_service)
 {
-	bl0906_write_register(GAIN_1, gain);
+	bl0906_write_register(GAIN_1, gain, uart_service);
 }
 
 /**
@@ -126,15 +134,16 @@ void bl0906_init(typeBl0906_handle_update_energy func, UartService* uart_service
 	foreach(i, NUMBER_RL) {
 		current_correction_par.complete_flag[i] = false;
 	}
-	// Set gain = 16 ngay khi init (không cần đợi 5 giây)
-	bl_0906_set_gain(16);
-	delay(50);  // Đợi ghi xong
-	bl0906_send_get_current();
+
+	//bl0906_proc();
+	//delay(50);  // Đợi ghi xong
+	//bl0906_send_get_current();
 }
 
 /**
  * @func    bl0906_set_uart
- * @brief   Set UART tạm thời để đọc từ kênh khác
+ * @brief   Set UART tạm thời 
+ để đọc từ kênh khác
  * @param   uart_service: UART service
  * @retval  None
  */
@@ -230,7 +239,7 @@ static void bl0906_bias_correction(uint8_t addr, float measurements, float corre
     else {
     	data[2] = (value >> 16);
     }
-	bl0906_write_register(addr, value);
+	bl0906_write_register(addr, value, NULL);
 
 	current_correction_par.rmsos[index] = value&0x00FFFFFF;
 
@@ -447,14 +456,18 @@ static void bl0906_handle_voltage_rsp(uint8_t* par, uint8_t par_len)
  */
 static void bl0906_handle_active_power_rsp(uint8_t* par, uint8_t par_len)
 {
-	int32_t data = array_to_u24(par);
-	if (data < 0) {
+	uint32_t data = array_to_u24(par);
+	bool sign_bit = (data >> 23) & 0x01;
+	float power_value = 0;
+	if (sign_bit == 1) {
 		DBG_BL0906_SEND_STR("\n Power Unused");
 		return;
 	}
-	
-	float power_value = (float)data * Vref * Vref * (Rf + Rv) /
+	else {
+		power_value = (float)data * Vref * Vref * (Rf + Rv) /
 			(40.4125 * Rl*Rv*Gain_i * Gain_v*1000);
+	}
+	
 	
 	// Xác định index dựa vào register
 	uint8_t index = 0;
@@ -505,7 +518,18 @@ static void bl0906_handle_temperature_rsp(uint8_t* par, uint8_t par_len)
  */
 static void bl0906_handle_gain_rsp(uint8_t* par, uint8_t par_len)
 {
-	gain_par.value = array_to_u24(par);
+	// Cập nhật gain_par cho kênh hiện tại
+	gain_par[current_channel].value = array_to_u24(par);
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+	DBG_BL0906_SEND_INT(current_channel);
+	DBG_BL0906_SEND_STR_INFO(" Gain raw data=");
+	DBG_BL0906_SEND_HEX32(gain_par[current_channel].value);
+	DBG_BL0906_SEND_STR_INFO(" (");
+	DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
+	DBG_BL0906_SEND_STR_INFO(")");
+	DBG_BL0906_SEND_STR_INFO("\nBL0906: Gain result Duong= ");
+	DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
+	DBG_BL0906_SEND_STR_INFO(")");
 }
 
 
@@ -586,16 +610,43 @@ static void bl0906_current_correction_proc(void)
  */
 static void bl0906_set_gain_proc(void)
 {
-	DBG_BL0906_SEND_STR_INFO("\nbl0906_set_gain_proc");
-	DBG_BL0906_SEND_STR_INFO("\ngain_par.value=");
-	DBG_Bl0906_SEND_DWORD(gain_par.value);
+	// Kiểm tra channel hợp lệ
+	if(current_channel >= 4) {
+		return;
+	}
+	
+	DBG_BL0906_SEND_STR_INFO("\nbl0906_set_gain_proc - Channel ");
+	DBG_BL0906_SEND_INT(current_channel);
+	DBG_BL0906_SEND_STR_INFO("\ngain_par[");
+	DBG_BL0906_SEND_INT(current_channel);
+	DBG_BL0906_SEND_STR_INFO("].value=");
+	DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
 	DBG_BL0906_SEND_STR_INFO("\nGAIN_1_DEFAULT_VALUE=");
 	DBG_Bl0906_SEND_DWORD(GAIN_1_DEFAULT_VALUE);
-	if(gain_par.value != GAIN_1_DEFAULT_VALUE) {
-		if(clock_time_exceed_ms(gain_par.set_gain_st_t_ms, SET_GAIN_INTERVAL_MS)) {
-			bl_0906_set_gain(GAIN_1_DEFAULT_VALUE);
+	
+	// Nếu chưa đọc gain lần nào cho kênh này, đọc trước để biết giá trị hiện tại
+	if(gain_par[current_channel].value == 0 && gain_par[current_channel].set_gain_st_t_ms == 0) {
+		DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+		DBG_BL0906_SEND_INT(current_channel);
+		DBG_BL0906_SEND_STR_INFO(" First time - reading GAIN_1");
+		bl0906_read_register(GAIN_1);
+		delay(50);  // Đợi đọc xong
+	}
+	
+	if(gain_par[current_channel].value != GAIN_1_DEFAULT_VALUE) {
+		DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+		DBG_BL0906_SEND_INT(current_channel);
+		DBG_BL0906_SEND_STR_INFO(" Gain not equal to default value");
+		// Cho phép set gain ngay lần đầu (set_gain_st_t_ms = 0) hoặc sau interval
+		if(gain_par[current_channel].set_gain_st_t_ms == 0 || clock_time_exceed_ms(gain_par[current_channel].set_gain_st_t_ms, SET_GAIN_INTERVAL_MS)) {
+			DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+			DBG_BL0906_SEND_INT(current_channel);
+			DBG_BL0906_SEND_STR_INFO(" Set gain to default value");
+			bl_0906_set_gain(GAIN_1_DEFAULT_VALUE, NULL);
+			delay(50);  // Đợi ghi xong
 			bl0906_read_register(GAIN_1);
-			gain_par.set_gain_st_t_ms = clock_time_ms();
+			delay(50);  // Đợi đọc xong
+			gain_par[current_channel].set_gain_st_t_ms = clock_time_ms();
 		}
 	}
 }
@@ -629,13 +680,16 @@ uint8_t _culcCheckSum(uint8_t *tx_data, int tx_len, uint8_t *rx_data, int rx_len
  * @param
  * @retval  None
  */
-static bool bl0906_write_register(uint8_t address, uint32_t data)
+static bool bl0906_write_register(uint8_t address, uint32_t data, UartService* uart_service)
 {
-	if (p_uart_service == NULL || p_uart_service->getSerial() == NULL) {
+	// Nếu không chỉ định UART, dùng UART hiện tại
+	UartService* target_uart = (uart_service != NULL) ? uart_service : p_uart_service;
+	
+	if (target_uart == NULL || target_uart->getSerial() == NULL) {
 		return false;
 	}
 	
-	HardwareSerial* serial = p_uart_service->getSerial();
+	HardwareSerial* serial = target_uart->getSerial();
 	
 	// Remove write protection
 	uint8_t tx_wrprot[] = { BL0906_WRITE_COMMAND, 0x9e, 0x55, 0x55, 0x00, 0xb7};
@@ -930,7 +984,7 @@ void bl0906_get_temperature(void)
  */
 bool bl0906_reset(void)
 {
-	if (false == bl0906_write_register(SOFT_RESET, 0x5A5A5A)) {
+	if (false == bl0906_write_register(SOFT_RESET, 0x5A5A5A, NULL)) {
 		DBG_BL0906_SEND_STR("Can not write SOFT_RESET register.");
 		return false;
 	}

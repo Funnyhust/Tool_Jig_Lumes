@@ -9,18 +9,17 @@ class RelayService;
 // Biến để điều khiển blink LED từ process
 extern volatile bool ledBlinkEnable;
 
-#define VOLTAGE_THRESHOLD 220
+#define VOLTAGE_THRESHOLD 230
 #define CURRENT_THRESHOLD 10
 #define ACTIVE_POWER_THRESHOLD 10
 
-#define VOLTAGE_THRESHOLD_LOW 200
-#define CURRENT_THRESHOLD_LOW 4
-#define ACTIVE_POWER_THRESHOLD_LOW 10
+#define VOLTAGE_THRESHOLD_LOW 215
+#define CURRENT_THRESHOLD_LOW 196
+#define ACTIVE_POWER_THRESHOLD_LOW 43
 
 #define VOLTAGE_THRESHOLD_HIGH 240
-#define CURRENT_THRESHOLD_HIGH 4
-#define ACTIVE_POWER_THRESHOLD_HIGH 20
-
+#define CURRENT_THRESHOLD_HIGH 199
+#define ACTIVE_POWER_THRESHOLD_HIGH 45
 
 // Khai báo hàm khởi tạo
 void process_init(void);
