@@ -19,11 +19,11 @@ void UartService::begin(int8_t rxPin, int8_t txPin) {
     _serial->setTimeout(1000);
     
     if (_tag) {
-        Serial.print("[");
-        Serial.print(_tag);
-        Serial.print("] UART initialized at ");
-        Serial.print(_baudRate);
-        Serial.println(" baud");
+        Serial1.print("[");
+        Serial1.print(_tag);
+        Serial1.print("] UART initialized at ");
+        Serial1.print(_baudRate);
+        Serial1.println(" baud");
     }
 }
 

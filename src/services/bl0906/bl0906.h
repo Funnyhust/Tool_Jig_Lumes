@@ -56,6 +56,22 @@ enum {
 };
 
 
+#define VOLTAGE_THRESHOLD 230
+#define CURRENT_THRESHOLD 10
+#define ACTIVE_POWER_THRESHOLD 10
+#define POWER_THRESHOLD 44
+
+#define VOLTAGE_THRESHOLD_LOW 215
+#define CURRENT_THRESHOLD_LOW 196
+#define ACTIVE_POWER_THRESHOLD_LOW 43
+#define POWER_THRESHOLD_LOW 42
+
+#define VOLTAGE_THRESHOLD_HIGH 240
+#define CURRENT_THRESHOLD_HIGH 199
+#define ACTIVE_POWER_THRESHOLD_HIGH 45
+#define POWER_THRESHOLD_HIGH 46
+
+
 typedef enum {
 	TYPE_CURRENT       = 0,
 	TYPE_VOLTAGE       = 1,
@@ -91,6 +107,9 @@ typedef struct {
 	bool current_1_ok=false;
 	bool current_2_ok=false;
 	bool current_3_ok=false;
+	bool power_1_ok=false;
+	bool power_2_ok=false;
+	bool power_3_ok=false;
 }measurement_value_t;
 
 typedef void (*p_func_handle)(uint8_t* par, uint8_t par_len);

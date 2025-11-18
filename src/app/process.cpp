@@ -29,15 +29,26 @@ static void is_channel_pass(int channel)
     // Kiểm tra voltage có trong ngưỡng cho phép không
     float voltage = channel_measurements[channel].voltage;
     channel_measurements[channel].voltage_ok = (voltage >= VOLTAGE_THRESHOLD_LOW && voltage <= VOLTAGE_THRESHOLD_HIGH);
-    
+
     // Kiểm tra current có trong ngưỡng cho phép không (đơn vị: mA)
     float current_1 = channel_measurements[channel].current[0];
     float current_2 = channel_measurements[channel].current[1];
     float current_3 = channel_measurements[channel].current[2];
-    
+
+
     channel_measurements[channel].current_1_ok = (current_1 >= CURRENT_THRESHOLD_LOW && current_1 <= CURRENT_THRESHOLD_HIGH);
     channel_measurements[channel].current_2_ok = (current_2 >= CURRENT_THRESHOLD_LOW && current_2 <= CURRENT_THRESHOLD_HIGH);
     channel_measurements[channel].current_3_ok = (current_3 >= CURRENT_THRESHOLD_LOW && current_3 <= CURRENT_THRESHOLD_HIGH);
+    
+    // Kiểm tra power có trong ngưỡng cho phép không (đơn vị: W)
+    float power_1 = channel_measurements[channel].active_power[0];
+    float power_2 = channel_measurements[channel].active_power[1];
+    float power_3 = channel_measurements[channel].active_power[2];
+
+
+    channel_measurements[channel].power_1_ok = (power_1 >= POWER_THRESHOLD_LOW && power_1 <= POWER_THRESHOLD_HIGH);
+    channel_measurements[channel].power_2_ok = (power_2 >= POWER_THRESHOLD_LOW && power_2 <= POWER_THRESHOLD_HIGH);
+    channel_measurements[channel].power_3_ok = (power_3 >= POWER_THRESHOLD_LOW && power_3 <= POWER_THRESHOLD_HIGH);
 }
 
 
@@ -52,7 +63,7 @@ void process_init(void)
     
     // Serial1 cho debug
     if (true) {  // Serial1 luôn có trên STM32F103VE
-        Serial.begin(19200);
+        Serial1.begin(19200);
         uartDebug = new UartService(&Serial, "DEBUG");
     }
     
@@ -84,7 +95,7 @@ void process_init(void)
     for (int i = 0; i < 4; i++) {
         if (uartBl0906[i] != NULL) {
             bl0906_init(NULL, uartBl0906[i]);
-            delay(10);  // Đợi init xong
+
         }
     }
     
@@ -95,9 +106,9 @@ void process_init(void)
             // vì p_uart_service bị ghi đè khi init các kênh sau
             bl0906_set_uart(uartBl0906[i]);
             bl0906_set_channel(i);
-            delay(10);  // Đợi set xong
+      
             bl0906_proc();  // Kiểm tra và set gain cho kênh này
-            delay(100);  // Đợi xử lý gain xong
+    
         }
     }
 }
@@ -122,24 +133,23 @@ static void read_bl0906_channel(int channel, UartService* uart)
         return;
     }
     // Flush UART để đảm bảo buffer sạch trước khi set gain (quan trọng cho kênh 0)
-    uart->getSerial()->flush();
-    delay(channel == 0 ? 50 : 10);  // Delay lâu hơn cho kênh 0
+    uart->getSerial()->flush(); delay(channel == 0 ? 50 : 10);  // Delay lâu hơn cho kênh 0
     bl0906_set_channel(channel);  // Set channel trước khi đọc (sẽ tự động reset giá trị)
-    delay(channel == 0 ? 50 : 10);  // Delay lâu hơn cho kênh 0
+  
     
     // Kiểm tra và set gain cho kênh này (đảm bảo gain đúng trước khi đọc)
     bl0906_proc();
     // Delay lâu hơn cho kênh 0 (channel đầu tiên) để đảm bảo gain được set xong
     // Kênh 0 cần delay lâu hơn vì có thể bị ảnh hưởng bởi init các kênh khác
-    delayWithBlink(channel == 0 ? 300 : 100);  // Đợi xử lý gain xong - blink LED
+
     
     // Đọc giá trị
     bl0906_send_get_current();
-    delayWithBlink(100); // Đợi đọc xong (3 lần đọc current) - blink LED trong lúc đợi
+
     bl0906_get_voltage();
-    delayWithBlink(50);  // Blink LED trong lúc đợi
+
     bl0906_get_active_power();
-    delayWithBlink(50);  // Blink LED trong lúc đợi
+   
     // Lưu giá trị vào mảng của kênh này ngay sau khi đọc
     channel_measurements[channel] = bl0906_get_all_measurements();
     
@@ -171,7 +181,7 @@ void start_process(void)
   // turn on all relay
    uint32_t start_time_ms = millis();
    relayService.turnOnAll();
-   delayWithBlink(200);
+   delayWithBlink(100);
    // Bật blink LED
    ledBlinkEnable = true;
    
@@ -182,7 +192,6 @@ void start_process(void)
            delay(10);  // Đợi UART được set xong
            bl0906_set_channel(i);
            // Delay lâu hơn cho kênh 0 để đảm bảo channel được set đúng
-           delay(i == 0 ? 50 : 10);  // Kênh 0 cần delay lâu hơn
        }
    }
    
@@ -235,9 +244,9 @@ void start_process(void)
            Serial1.print(channel_measurements[i].current_2_ok);
            Serial1.print(", ");
            Serial1.println(channel_measurements[i].current_3_ok);
-           relayService.setRelayState(i*3, channel_measurements[i].current_1_ok);
-           relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok);
-           relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok);
+           relayService.setRelayState(i*3, channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok);
+           relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok);
+           relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok&channel_measurements[i].power_3_ok);
        }
    }
 

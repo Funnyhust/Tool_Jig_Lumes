@@ -630,7 +630,7 @@ static void bl0906_set_gain_proc(void)
 		DBG_BL0906_SEND_INT(current_channel);
 		DBG_BL0906_SEND_STR_INFO(" First time - reading GAIN_1");
 		bl0906_read_register(GAIN_1);
-		delay(50);  // Đợi đọc xong và cập nhật gain_par
+		delay(10);  // Đợi đọc xong và cập nhật gain_par
 	}
 	
 	if(gain_par[current_channel].value != GAIN_1_DEFAULT_VALUE) {
@@ -663,11 +663,11 @@ static void bl0906_set_gain_proc(void)
 				
 				// Set gain
 				bl_0906_set_gain(GAIN_1_DEFAULT_VALUE, NULL);
-				delay(50);  // Đợi ghi xong
+				delay(10);  // Đợi ghi xong
 				
 				// Verify: Đọc lại để kiểm tra
 				bl0906_read_register(GAIN_1);
-				delay(50);  // Đợi đọc xong và cập nhật gain_par
+				delay(10);  // Đợi đọc xong và cập nhật gain_par
 				
 				// Kiểm tra xem gain đã được set đúng chưa
 				if(gain_par[current_channel].value == GAIN_1_DEFAULT_VALUE) {
@@ -681,7 +681,7 @@ static void bl0906_set_gain_proc(void)
 					DBG_BL0906_SEND_STR_INFO(" Set gain FAILED (read=");
 					DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
 					DBG_BL0906_SEND_STR_INFO("), retry...");
-					delay(50);  // Đợi trước khi retry
+					//delay(50);  // Đợi trước khi retry
 				}
 			}
 			
