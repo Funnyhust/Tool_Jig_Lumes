@@ -18,15 +18,15 @@
 // Debug macros - in ra Serial5
 //#define BL0906_DBG_EN false
 #ifdef  BL0906_DBG_EN
-	#define DBG_BL0906_SEND_STR(x)          do { if (Serial5) Serial5.print(x); } while(0)
-	#define DBG_BL0906_SEND_STR_INFO(x)     do { if (Serial5) Serial5.print(x); } while(0)
-	#define DBG_BL0906_SEND_STR_ERROR(x)    do { if (Serial5) {Serial5.print("[ERROR]");   Serial5.print(x);} } while(0)
-	#define DBG_BL0906_SEND_INT(x)     do { if (Serial5) Serial5.print(x); } while(0)
-	#define DBG_BL0906_SEND_HEX(x)     do { if (Serial5) { Serial5.print("0x"); Serial5.print(x, HEX); } } while(0)
-	#define DBG_BL0906_SEND_BYTE(x)    do { if (Serial5) { Serial5.print("0x"); if (x < 0x10) Serial5.print("0"); Serial5.print(x, HEX); } } while(0)
-    #define DBG_BL0906_SEND_HEX32(x)   do { if (Serial5) { Serial5.print("0x"); Serial5.print(x, HEX); } } while(0)
-    #define DBG_Bl0906_SEND_DWORD(x)   do { if (Serial5) Serial5.print(x); } while(0)
-    #define DBG_Bl0906_SEND_FLOAT(x)   do { if (Serial5) Serial5.print(x, 3); } while(0)
+	#define DBG_BL0906_SEND_STR(x)          do { if (Serial) Serial.print(x); } while(0)
+	#define DBG_BL0906_SEND_STR_INFO(x)     do { if (Serial) Serial.print(x); } while(0)
+	#define DBG_BL0906_SEND_STR_ERROR(x)    do { if (Serial) {Serial.print("[ERROR]");   Serial.print(x);} } while(0)
+	#define DBG_BL0906_SEND_INT(x)     do { if (Serial) Serial.print(x); } while(0)
+	#define DBG_BL0906_SEND_HEX(x)     do { if (Serial) { Serial.print("0x"); Serial.print(x, HEX); } } while(0)
+	#define DBG_BL0906_SEND_BYTE(x)    do { if (Serial) { Serial.print("0x"); if (x < 0x10) Serial.print("0"); Serial.print(x, HEX); } } while(0)
+    #define DBG_BL0906_SEND_HEX32(x)   do { if (Serial) { Serial.print("0x"); Serial.print(x, HEX); } } while(0)
+    #define DBG_Bl0906_SEND_DWORD(x)   do { if (Serial) Serial.print(x); } while(0)
+    #define DBG_Bl0906_SEND_FLOAT(x)   do { if (Serial) Serial.print(x, 3); } while(0)
 #else
 	#define DBG_BL0906_SEND_STR(x)
     #define DBG_BL0906_SEND_STR_INFO(x)
@@ -630,7 +630,7 @@ static void bl0906_set_gain_proc(void)
 		DBG_BL0906_SEND_INT(current_channel);
 		DBG_BL0906_SEND_STR_INFO(" First time - reading GAIN_1");
 		bl0906_read_register(GAIN_1);
-		delay(50);  // Đợi đọc xong
+		delay(50);  // Đợi đọc xong và cập nhật gain_par
 	}
 	
 	if(gain_par[current_channel].value != GAIN_1_DEFAULT_VALUE) {
@@ -639,15 +639,66 @@ static void bl0906_set_gain_proc(void)
 		DBG_BL0906_SEND_STR_INFO(" Gain not equal to default value");
 		// Cho phép set gain ngay lần đầu (set_gain_st_t_ms = 0) hoặc sau interval
 		if(gain_par[current_channel].set_gain_st_t_ms == 0 || clock_time_exceed_ms(gain_par[current_channel].set_gain_st_t_ms, SET_GAIN_INTERVAL_MS)) {
-			DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
-			DBG_BL0906_SEND_INT(current_channel);
-			DBG_BL0906_SEND_STR_INFO(" Set gain to default value");
-			bl_0906_set_gain(GAIN_1_DEFAULT_VALUE, NULL);
-			delay(50);  // Đợi ghi xong
-			bl0906_read_register(GAIN_1);
-			delay(50);  // Đợi đọc xong
+			// Kiểm tra UART trước khi set gain
+			if (p_uart_service == NULL || p_uart_service->getSerial() == NULL) {
+				DBG_BL0906_SEND_STR_ERROR("\nBL0906: Channel ");
+				DBG_BL0906_SEND_INT(current_channel);
+				DBG_BL0906_SEND_STR_ERROR(" UART is NULL! Cannot set gain.");
+				return;
+			}
+			
+			// Retry với verify để đảm bảo 100% thành công
+			const uint8_t MAX_RETRY = 3;
+			bool set_success = false;
+			
+			for(uint8_t retry = 0; retry < MAX_RETRY && !set_success; retry++) {
+				DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+				DBG_BL0906_SEND_INT(current_channel);
+				DBG_BL0906_SEND_STR_INFO(" Set gain attempt ");
+				DBG_BL0906_SEND_INT(retry + 1);
+				
+				// Flush UART trước khi set gain để đảm bảo buffer sạch
+				p_uart_service->getSerial()->flush();
+				delay(5);
+				
+				// Set gain
+				bl_0906_set_gain(GAIN_1_DEFAULT_VALUE, NULL);
+				delay(50);  // Đợi ghi xong
+				
+				// Verify: Đọc lại để kiểm tra
+				bl0906_read_register(GAIN_1);
+				delay(50);  // Đợi đọc xong và cập nhật gain_par
+				
+				// Kiểm tra xem gain đã được set đúng chưa
+				if(gain_par[current_channel].value == GAIN_1_DEFAULT_VALUE) {
+					set_success = true;
+					DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+					DBG_BL0906_SEND_INT(current_channel);
+					DBG_BL0906_SEND_STR_INFO(" Set gain SUCCESS");
+				} else {
+					DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+					DBG_BL0906_SEND_INT(current_channel);
+					DBG_BL0906_SEND_STR_INFO(" Set gain FAILED (read=");
+					DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
+					DBG_BL0906_SEND_STR_INFO("), retry...");
+					delay(50);  // Đợi trước khi retry
+				}
+			}
+			
+			if(!set_success) {
+				DBG_BL0906_SEND_STR_ERROR("\nBL0906: Channel ");
+				DBG_BL0906_SEND_INT(current_channel);
+				DBG_BL0906_SEND_STR_ERROR(" Set gain FAILED after ");
+				DBG_BL0906_SEND_INT(MAX_RETRY);
+				DBG_BL0906_SEND_STR_ERROR(" attempts!");
+			}
+			
 			gain_par[current_channel].set_gain_st_t_ms = clock_time_ms();
 		}
+	} else {
+		DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+		DBG_BL0906_SEND_INT(current_channel);
+		DBG_BL0906_SEND_STR_INFO(" Gain already correct");
 	}
 }
 void bl0906_proc(void)
@@ -748,7 +799,7 @@ static void bl0906_read_register(uint8_t address)
 	
 	// Đợi cho đến khi có đủ bytes trong buffer hoặc timeout
 	uint32_t start_time = millis();
-	uint32_t timeout_ms = 100; // Timeout 500ms (tăng lên để đợi lâu hơn)
+	uint32_t timeout_ms = 50; // Timeout 500ms (tăng lên để đợi lâu hơn)
 	uint8_t available_bytes = 0;
 	while ((available_bytes = serial->available()) < BL0906_RX_LEN) {
 		if ((millis() - start_time) >= timeout_ms) {

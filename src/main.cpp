@@ -38,12 +38,10 @@ void setup() {
     process_init();
     ledBlinkEnable = true;
     start_process();
+    digitalWrite(LED_PIN,LOW);
     ledBlinkEnable = false;
-    zero_detect_init();
-    zero_detect_process();
 }
 
 void loop() {
     // Blink LED trong lúc chờ giữa các lần test
-
 }

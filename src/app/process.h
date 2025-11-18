@@ -21,7 +21,13 @@ extern volatile bool ledBlinkEnable;
 #define CURRENT_THRESHOLD_HIGH 199
 #define ACTIVE_POWER_THRESHOLD_HIGH 45
 
+
+
+
+extern bool zero_detect_result[4];  // Kết quả zero detect cho 4 kênh
+
 // Khai báo hàm khởi tạo
+
 void process_init(void);
 void start_process(void);
 
