@@ -35,17 +35,16 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
     relayService.init();
+    relayService.turnOnAll();
+    delay(1000);
     process_init();
-
-
-
-}
-
-void loop() {
-    // Blink LED trong lúc chờ giữa các lần test
     ledBlinkEnable = true;
     start_process();
     ledBlinkEnable = false;
     digitalWrite(LED_PIN, LOW);
-    delay(2000);  
+}
+
+void loop() {
+    // Blink LED trong lúc chờ giữa các lần test
+
 }

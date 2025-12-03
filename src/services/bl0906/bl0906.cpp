@@ -15,18 +15,19 @@
 #include "bl0906.h"
 #include "utilities.h"
 #include "../uart/uart_service.h"
+#include "../../config.h"
 // Debug macros - in ra Serial5
 //#define BL0906_DBG_EN false
 #ifdef  BL0906_DBG_EN
-	#define DBG_BL0906_SEND_STR(x)          do { if (Serial) Serial.print(x); } while(0)
-	#define DBG_BL0906_SEND_STR_INFO(x)     do { if (Serial) Serial.print(x); } while(0)
-	#define DBG_BL0906_SEND_STR_ERROR(x)    do { if (Serial) {Serial.print("[ERROR]");   Serial.print(x);} } while(0)
-	#define DBG_BL0906_SEND_INT(x)     do { if (Serial) Serial.print(x); } while(0)
-	#define DBG_BL0906_SEND_HEX(x)     do { if (Serial) { Serial.print("0x"); Serial.print(x, HEX); } } while(0)
-	#define DBG_BL0906_SEND_BYTE(x)    do { if (Serial) { Serial.print("0x"); if (x < 0x10) Serial.print("0"); Serial.print(x, HEX); } } while(0)
-    #define DBG_BL0906_SEND_HEX32(x)   do { if (Serial) { Serial.print("0x"); Serial.print(x, HEX); } } while(0)
-    #define DBG_Bl0906_SEND_DWORD(x)   do { if (Serial) Serial.print(x); } while(0)
-    #define DBG_Bl0906_SEND_FLOAT(x)   do { if (Serial) Serial.print(x, 3); } while(0)
+	#define DBG_BL0906_SEND_STR(x)          do { if (Serial) UART_DEBUG.print(x); } while(0)
+	#define DBG_BL0906_SEND_STR_INFO(x)     do { if (Serial) UART_DEBUG.print(x); } while(0)
+	#define DBG_BL0906_SEND_STR_ERROR(x)    do { if (Serial) {UART_DEBUG.print("[ERROR]");   UART_DEBUG.print(x);} } while(0)
+	#define DBG_BL0906_SEND_INT(x)     do { if (Serial) UART_DEBUG.print(x); } while(0)
+	#define DBG_BL0906_SEND_HEX(x)     do { if (Serial) { UART_DEBUG.print("0x"); UART_DEBUG.print(x, HEX); } } while(0)
+	#define DBG_BL0906_SEND_BYTE(x)    do { if (Serial) { UART_DEBUG.print("0x"); if (x < 0x10) UART_DEBUG.print("0"); UART_DEBUG.print(x, HEX); } } while(0)
+    #define DBG_BL0906_SEND_HEX32(x)   do { if (Serial) { UART_DEBUG.print("0x"); UART_DEBUG.print(x, HEX); } } while(0)
+    #define DBG_Bl0906_SEND_DWORD(x)   do { if (Serial) UART_DEBUG.print(x); } while(0)
+    #define DBG_Bl0906_SEND_FLOAT(x)   do { if (Serial) UART_DEBUG.print(x, 3); } while(0)
 #else
 	#define DBG_BL0906_SEND_STR(x)
     #define DBG_BL0906_SEND_STR_INFO(x)
@@ -51,7 +52,7 @@ const uint16_t timeout = 1000;  //Serial timeout[ms]
 const float Vref = 1.097;  //[V]
 
 const float Rf = 470*4;
-const float Rv = 1;
+const float Rv = 1.1;
 const float Gain_v = 1;
 const float Gain_i = 16;
 const float Rl = 2;  // mOhm
@@ -630,7 +631,6 @@ static void bl0906_set_gain_proc(void)
 		DBG_BL0906_SEND_INT(current_channel);
 		DBG_BL0906_SEND_STR_INFO(" First time - reading GAIN_1");
 		bl0906_read_register(GAIN_1);
-		delay(10);  // Đợi đọc xong và cập nhật gain_par
 	}
 	
 	if(gain_par[current_channel].value != GAIN_1_DEFAULT_VALUE) {
@@ -656,18 +656,18 @@ static void bl0906_set_gain_proc(void)
 				DBG_BL0906_SEND_INT(current_channel);
 				DBG_BL0906_SEND_STR_INFO(" Set gain attempt ");
 				DBG_BL0906_SEND_INT(retry + 1);
+				UART_DEBUG.print("DEBUG_UART: ");
+				UART_DEBUG.println(retry+1);
 				
 				// Flush UART trước khi set gain để đảm bảo buffer sạch
 				p_uart_service->getSerial()->flush();
-				delay(5);
 				
 				// Set gain
 				bl_0906_set_gain(GAIN_1_DEFAULT_VALUE, NULL);
-				delay(10);  // Đợi ghi xong
+				delay(5);  // Đợi ghi xong
 				
 				// Verify: Đọc lại để kiểm tra
 				bl0906_read_register(GAIN_1);
-				delay(10);  // Đợi đọc xong và cập nhật gain_par
 				
 				// Kiểm tra xem gain đã được set đúng chưa
 				if(gain_par[current_channel].value == GAIN_1_DEFAULT_VALUE) {
@@ -704,6 +704,7 @@ static void bl0906_set_gain_proc(void)
 void bl0906_proc(void)
 {
 	bl0906_set_gain_proc();
+
 }
 /**
  * @func    _culcCheckSum
@@ -795,7 +796,9 @@ static void bl0906_read_register(uint8_t address)
 	DBG_BL0906_SEND_BYTE(address);
 	
 	// Đợi một chút để thiết bị có thời gian phản hồi
-	delay(5); 
+	// Khi debug bật, các print statements trên tạo delay tự nhiên (~10-20ms)
+	// Khi debug tắt, cần delay này để đảm bảo BL0906 có đủ thời gian xử lý
+	delay(15);  // Tăng từ 5ms lên 15ms để bù thời gian debug output 
 	
 	// Đợi cho đến khi có đủ bytes trong buffer hoặc timeout
 	uint32_t start_time = millis();
@@ -966,7 +969,9 @@ static void bl0906_read_register(uint8_t address)
 void bl0906_send_get_current(void)
 {
 	bl0906_read_register(I1_RMS);
+	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
 	bl0906_read_register(I2_RMS);
+	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
 	bl0906_read_register(I3_RMS);
 }
 
@@ -990,7 +995,9 @@ void bl0906_get_voltage(void)
 void bl0906_get_active_power(void)
 {
 	bl0906_read_register(WATT_1);
+	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
 	bl0906_read_register(WATT_2);
+	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
 	bl0906_read_register(WATT_3);
 }
 

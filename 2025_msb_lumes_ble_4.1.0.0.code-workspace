@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../bl0906/2025_msb_lumes_ble_4.1.0.0"
+		},
+		{
+			"name": "Tool_Jig_Test_PlatformIO",
+			"path": "../../../Documents/PlatformIO/Projects/Tool_Jig_Test_PlatformIO"
+		},
+		{
+			"name": "Tool_Jig_Lumes_platformio",
+			"path": "."
+		}
+	],
+	"settings": {}
+}

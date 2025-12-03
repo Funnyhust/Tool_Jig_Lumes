@@ -1,0 +1,14 @@
+// Note các chân sử dụng cho phần mềm I2C
+/*
+
+PE13 TIM1_CH3
+PE14 TIM1_CH4          
+PE15 TIM1_BKIN       
+PB13 TIM1_CH1N 
+PB14 TIM1_CH2N  
+PB15 TIM1_CH3N
+PD8 FSMC_D13             
+PD9 FSMC_D14 
+PD10 FSMC_D15
+PD11 FSMC_A16
+*/

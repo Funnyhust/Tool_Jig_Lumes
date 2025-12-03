@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
 #include "zero_detect.h"
+#include "../../config.h"
+#include "wiring_constants.h"
 
 // Khai báo hàm delayWithBlink từ main.cpp
 extern void delayWithBlink(uint32_t ms);
@@ -13,19 +15,19 @@ static bool zero_detect_initialized = false;
 void zero_detect_interrupt_1(void) { 
     zero_detect_count[0]++; 
     // Debug: in ra Serial (cẩn thận, Serial trong ISR có thể gây vấn đề)
-    // Serial1.println("ISR1");
+    // UART_DEBUG.println("ISR1");
 }
 void zero_detect_interrupt_2(void) { 
     zero_detect_count[1]++; 
-    // Serial1.println("ISR2");
+    // UART_DEBUG.println("ISR2");
 }
 void zero_detect_interrupt_3(void) { 
     zero_detect_count[2]++; 
-    // Serial1.println("ISR3");
+    // UART_DEBUG.println("ISR3");
 }
 void zero_detect_interrupt_4(void) { 
     zero_detect_count[3]++; 
-    // Serial1.println("ISR4");
+    // UART_DEBUG.println("ISR4");
 }
 
 
@@ -38,15 +40,15 @@ void zero_detect_init(void)
         return;
     }
     
-    Serial1.println("Zero detect init");
-    Serial1.print("PC0 pin number: ");
-    Serial1.println(ZERO_DETECT_PORT_1);
-    Serial1.print("PC1 pin number: ");
-    Serial1.println(ZERO_DETECT_PORT_2);
-    Serial1.print("PC2 pin number: ");
-    Serial1.println(ZERO_DETECT_PORT_3);
-    Serial1.print("PC3 pin number: ");
-    Serial1.println(ZERO_DETECT_PORT_4);
+    UART_DEBUG.println("Zero detect init");
+    UART_DEBUG.print("PC0 pin number: ");
+    UART_DEBUG.println(ZERO_DETECT_PORT_1);
+    UART_DEBUG.print("PC1 pin number: ");
+    UART_DEBUG.println(ZERO_DETECT_PORT_2);
+    UART_DEBUG.print("PC2 pin number: ");
+    UART_DEBUG.println(ZERO_DETECT_PORT_3);
+    UART_DEBUG.print("PC3 pin number: ");
+    UART_DEBUG.println(ZERO_DETECT_PORT_4);
     
     // Set pin mode trước khi attach interrupt
     pinMode(ZERO_DETECT_PORT_1, INPUT_PULLUP);
@@ -61,28 +63,29 @@ void zero_detect_init(void)
     int pin3 = digitalPinToInterrupt(ZERO_DETECT_PORT_3);
     int pin4 = digitalPinToInterrupt(ZERO_DETECT_PORT_4);
     
-    Serial1.print("Interrupt pin 1 (PC0): ");
-    Serial1.println(pin1);
-    Serial1.print("Interrupt pin 2 (PC1): ");
-    Serial1.println(pin2);
-    Serial1.print("Interrupt pin 3 (PC2): ");
-    Serial1.println(pin3);
-    Serial1.print("Interrupt pin 4 (PC3): ");
-    Serial1.println(pin4);
+    UART_DEBUG.print("Interrupt pin 1 (PC0): ");
+    UART_DEBUG.println(pin1);
+    UART_DEBUG.print("Interrupt pin 2 (PC1): ");
+    UART_DEBUG.println(pin2);
+    UART_DEBUG.print("Interrupt pin 3 (PC2): ");
+    UART_DEBUG.println(pin3);
+    UART_DEBUG.print("Interrupt pin 4 (PC3): ");
+    UART_DEBUG.println(pin4);
     
     // Trên STM32, nếu các pin có cùng interrupt number, chúng sẽ trigger cùng nhau
     // Cần kiểm tra xem có phải vấn đề này không
     if (pin1 == pin2 || pin1 == pin3 || pin1 == pin4 || 
         pin2 == pin3 || pin2 == pin4 || pin3 == pin4) {
-        Serial1.println("WARNING: Some pins share the same interrupt number!");
+        UART_DEBUG.println("WARNING: Some pins share the same interrupt number!");
     }
     
-    attachInterrupt(pin1, zero_detect_interrupt_1, RISING);
-    attachInterrupt(pin2, zero_detect_interrupt_2, RISING);
-    attachInterrupt(pin3, zero_detect_interrupt_3, RISING);
-    attachInterrupt(pin4, zero_detect_interrupt_4, RISING);
+    // Trên STM32, attachInterrupt có thể cần dùng pin number trực tiếp
+    attachInterrupt(ZERO_DETECT_PORT_1, zero_detect_interrupt_1, RISING);
+    attachInterrupt(ZERO_DETECT_PORT_2, zero_detect_interrupt_2, RISING);
+    attachInterrupt(ZERO_DETECT_PORT_3, zero_detect_interrupt_3, RISING);
+    attachInterrupt(ZERO_DETECT_PORT_4, zero_detect_interrupt_4, RISING);
     
-    Serial1.println("Interrupts attached");
+    UART_DEBUG.println("Interrupts attached");
     
     zero_detect_initialized = true;
 }
@@ -109,10 +112,10 @@ void zero_detect_process(void)
     
     // In kết quả
     for (int i = 0; i < 4; i++) {
-        Serial1.print("Zero detect count ");
-        Serial1.print(i + 1);
-        Serial1.print(": ");
-        Serial1.println(zero_detect_count[i]);
+        UART_DEBUG.print("Zero detect count ");
+        UART_DEBUG.print(i + 1);
+        UART_DEBUG.print(": ");
+        UART_DEBUG.println(zero_detect_count[i]);
     }
 }
 
