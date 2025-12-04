@@ -100,9 +100,12 @@ typedef struct {
 	float current[3];      // 3 kênh dòng điện (I1, I2, I3) - đơn vị: mA
 	float voltage;         // Điện áp - đơn vị: V
 	float active_power[3]; // 3 kênh công suất (WATT_1, WATT_2, WATT_3) - đơn vị: W
-	float active_energy;
 	float power_factor;
-	float temperature;
+	uint16_t volatge_calib[5];
+	uint16_t current_calib[3][5];
+	uint16_t active_power_calib[3][5];
+	uint16_t temperature;
+	uint8_t active_energy;
 	bool voltage_ok=false;
 	bool current_1_ok=false;
 	bool current_2_ok=false;
@@ -168,6 +171,7 @@ void bl0906_set_debug_uart(UartService* debug_uart);  // Set UART để log debu
 void bl0906_reset_measurements(void);  // Reset giá trị đo của kênh hiện tại về 0
 bool bl0906_is_correction_complete_or_timeout(void);
 void bl0906_proc(void);  // Hàm xử lý định kỳ (auto-recovery gain)
+void bl0906_current_correction_proc(void);
 
 // ========== Read/Write Register Functions ==========
 void bl0906_send_get_current(void);  // Đọc 3 kênh current (I1, I2, I3)

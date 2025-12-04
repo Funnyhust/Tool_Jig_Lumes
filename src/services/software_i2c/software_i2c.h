@@ -33,6 +33,7 @@ void i2c_init();
 
 // Các hàm giao tiếp I2C
 void i2c_start();
+void i2c_restart();  // Repeated START condition
 void i2c_stop();
 bool i2c_write_byte(uint8_t data);
 uint8_t i2c_read_byte(bool ack);

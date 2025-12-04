@@ -54,7 +54,7 @@ const float Vref = 1.097;  //[V]
 const float Rf = 470*4;
 const float Rv = 1.1;
 const float Gain_v = 1;
-const float Gain_i = 16;
+const float Gain_i = 1;
 const float Rl = 2;  // mOhm
 
 static uint8_t cmd_is_running_register = REG_UNKNOWN;  // Register đang đọc
@@ -135,10 +135,8 @@ void bl0906_init(typeBl0906_handle_update_energy func, UartService* uart_service
 	foreach(i, NUMBER_RL) {
 		current_correction_par.complete_flag[i] = false;
 	}
-
-	//bl0906_proc();
-	//delay(50);  // Đợi ghi xong
-	//bl0906_send_get_current();
+	bl0906_send_get_current();
+	bl0906_current_correction_proc();
 }
 
 /**
@@ -573,7 +571,7 @@ void bl0906_measurenment_start(uint16_t m_mask)
  * @param
  * @retval  None
  */
-static void bl0906_current_correction_proc(void)
+void bl0906_current_correction_proc(void)
 {
 	bool complete = true;
 	if(current_correction_par.is_running == false) {
@@ -702,9 +700,10 @@ static void bl0906_set_gain_proc(void)
 	}
 }
 void bl0906_proc(void)
-{
+{   
+	if(Gain_i ==16){
 	bl0906_set_gain_proc();
-
+	}
 }
 /**
  * @func    _culcCheckSum

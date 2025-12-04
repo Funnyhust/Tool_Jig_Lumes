@@ -65,6 +65,22 @@ void i2c_init() {
 
 // Tạo điều kiện START
 void i2c_start() {
+    // Đảm bảo pin SDA ở chế độ OUTPUT
+    pinMode(SDA_PIN, OUTPUT);
+    SDA_HIGH();
+    i2c_delay();
+    SCL_HIGH();
+    i2c_delay();
+    SDA_LOW();
+    i2c_delay();
+    SCL_LOW();
+    i2c_delay();
+}
+
+// Tạo điều kiện Repeated START (không có STOP trước đó)
+void i2c_restart() {
+    // Đảm bảo pin SDA ở chế độ OUTPUT
+    pinMode(SDA_PIN, OUTPUT);
     SDA_HIGH();
     i2c_delay();
     SCL_HIGH();
@@ -77,6 +93,8 @@ void i2c_start() {
 
 // Tạo điều kiện STOP
 void i2c_stop() {
+    // Đảm bảo pin SDA ở chế độ OUTPUT
+    pinMode(SDA_PIN, OUTPUT);
     SDA_LOW();
     i2c_delay();
     SCL_HIGH();
@@ -87,6 +105,9 @@ void i2c_stop() {
 
 // Ghi 1 byte và đọc ACK
 bool i2c_write_byte(uint8_t data) {
+    // Đảm bảo pin SDA ở chế độ OUTPUT để ghi dữ liệu
+    pinMode(SDA_PIN, OUTPUT);
+    
     for (uint8_t i = 0; i < 8; i++) {
         if (data & 0x80) {
             SDA_HIGH();
@@ -102,8 +123,7 @@ bool i2c_write_byte(uint8_t data) {
     }
     
     // Release SDA để đọc ACK
-    pinMode(SDA_PIN, INPUT_PULLUP);
-    SDA_HIGH();
+    pinMode(SDA_PIN, INPUT_PULLUP);  // INPUT_PULLUP đã tự động kéo pin lên HIGH
     i2c_delay();
     SCL_HIGH();
     i2c_delay();
@@ -113,6 +133,8 @@ bool i2c_write_byte(uint8_t data) {
     pinMode(SDA_PIN, OUTPUT);
     return ack;
 }
+
+
 
 // Đọc 1 byte và gửi ACK/NACK
 uint8_t i2c_read_byte(bool ack) {

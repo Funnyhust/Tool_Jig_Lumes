@@ -7,17 +7,88 @@
 #include "../services/relay/relay_service.h"
 #include "../services/zero_detect/zero_detect.h"
 #include "../config.h"
+#include "../services/eeprom_at24c02/at24c02.h"
 // Khai báo hàm delay có blink LED từ main.cpp
 extern void delayWithBlink(uint32_t ms);
-
 
 // 4 uart bl0906, 1 uart debug
 // Khởi tạo trong hàm để tránh lỗi undefined reference
 static UartService* uartBl0906[4] = {NULL, NULL, NULL, NULL};
 static UartService* uartDebug = NULL;
 
+
 // Lưu giá trị đo được cho từng kênh BL0906
 static measurement_value_t channel_measurements[4];
+
+uint32_t voltage_sum_uv[4] = {0, 0, 0, 0};
+uint32_t current_sum_ua[4][3] = {0, 0, 0, 0};
+uint32_t power_sum_uw[4][3] = {0, 0, 0, 0};
+
+// Đếm số lần đo được cho từng kênh BL0906
+uint8_t voltage_calib_count[4] = {0, 0, 0, 0};
+uint8_t current_calib_count[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
+uint8_t power_calib_count[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
+
+uint32_t voltage_calib_value[4] = {0, 0, 0, 0};
+uint32_t current_calib_value[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
+uint32_t power_calib_value[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
+
+//hệ số calibration
+uint16_t kVoltage[4] ;
+uint16_t kCurrent[4][3];
+uint16_t kPower[4][3];
+
+uint8_t eeprom_value[4][16];
+
+static void process_calibrate(int channel){
+    for(int i = 0; i < 4; i++){
+        if(voltage_calib_count[i] > 0){
+            voltage_calib_value[i] = voltage_sum_uv[i] / voltage_calib_count[i];
+            kVoltage[i] = voltage_calib_value[i] / VOLTAGE_THRESHOLD_DEFAULT[i];
+        }
+    }
+    for(int i = 0; i < 4; i++){
+        for(int j = 0; j < 3; j++){
+            if(current_calib_count[i][j] > 0){
+                current_calib_value[i][j] = current_sum_ua[i][j] / current_calib_count[i][j];
+                kCurrent[i][j] = current_calib_value[i][j] / CURRENT_THRESHOLD_DEFAULT[i][j];
+            }
+        }
+    }
+    for(int i = 0; i < 4; i++){
+        for(int j = 0; j < 3; j++){
+            if(power_calib_count[i][j] > 0){
+                power_calib_value[i][j] = power_sum_uw[i][j] / power_calib_count[i][j];
+                kPower[i][j] = power_calib_value[i][j] / POWER_THRESHOLD_DEFAULT[i][j];
+            }
+        }
+    }
+}
+
+
+void prepare_wrire_eeprom_value(void){
+    for(int i = 0; i < 4; i++){
+        eeprom_value[i][0] = kVoltage[i];
+        eeprom_value[i][1] = kVoltage[i] >> 8;
+        for(int j = 0; j < 6; j++){
+            eeprom_value[i][j*2+2] = kCurrent[i][j];  
+            eeprom_value[i][j*2+2+1] = kCurrent[i][j] >> 8;
+        }
+        for(int j = 0; j < 3; j++){
+            eeprom_value[i][j*2+8] = kPower[i][j];
+            eeprom_value[i][j*2+8+1] = kPower[i][j] >> 8;
+        }
+    }
+    //2 byte cuối bằng 0
+    eeprom_value[i][15] = 0;
+    eeprom_value[i][16] = 0;
+}
+
+void write_eeprom_value(void){
+    for(int i = 0; i < 4; i++){
+        at24c02_write_block(i*16, eeprom_value[i], 16);
+    }
+}
 
 // Kết quả zero detect cho 4 kênh
 bool zero_detect_result[4] = {true, true, true, true};
@@ -145,33 +216,52 @@ static void read_bl0906_channel(int channel, UartService* uart)
     
     // Đọc giá trị
     bl0906_send_get_current();
-
     bl0906_get_voltage();
-
     bl0906_get_active_power();
-   
-    // Lưu giá trị vào mảng của kênh này ngay sau khi đọc
-    channel_measurements[channel] = bl0906_get_all_measurements();
-    
-    //Logging giá trị đo được bằng serial4 (chia nhỏ để không block LED blink)
-    UART_DEBUG.print("Channel: ");
-    UART_DEBUG.println(channel);
-    UART_DEBUG.print("Voltage: ");
-    UART_DEBUG.println(channel_measurements[channel].voltage);
-    UART_DEBUG.print("Current[0]: ");  
-    UART_DEBUG.println(channel_measurements[channel].current[0]);
-    UART_DEBUG.print("Current[1]: ");
-    UART_DEBUG.println(channel_measurements[channel].current[1]);
-    UART_DEBUG.print("Current[2]: ");
-    UART_DEBUG.println(channel_measurements[channel].current[2]);
-    UART_DEBUG.print("Active Power[0]: ");
-    UART_DEBUG.println(channel_measurements[channel].active_power[0]);
-    UART_DEBUG.print("Active Power[1]: ");
-    UART_DEBUG.println(channel_measurements[channel].active_power[1]);
-    UART_DEBUG.print("Active Power[2]: ");
-    UART_DEBUG.println(channel_measurements[channel].active_power[2]);
-    UART_DEBUG.println("--------------------------------");
+
+    // Lưu giá trị vào mảng của kênh này ngay sau khi đọc giá trị đơn vị uV, uA, uW
+    channel_measurements[channel] = bl0906_get_all_measurements(); 
+    if (channel_measurements[channel].voltage > 0) {
+    voltage_sum_uv[channel] += channel_measurements[channel].voltage*1000*1000;
+    voltage_calib_count[channel]++;
+    }
+    if (channel_measurements[channel].current[0] > 0) {     
+        current_sum_ua[channel][0] += channel_measurements[channel].current[0]*1000;
+        current_calib_count[0][channel]++;
+    }
+    if (channel_measurements[channel].current[1] > 0) {
+        current_sum_ua[channel][1] += channel_measurements[channel].current[1]*1000;
+        current_calib_count[1][channel]++;
+    }
+    if (channel_measurements[channel].current[2] > 0) {
+        current_sum_ua[channel][2] += channel_measurements[channel].current[2]*1000;
+        current_calib_count[2][channel]++;
+    }
+    if (channel_measurements[channel].active_power[0] > 0) {
+        power_sum_uw[channel][0] += channel_measurements[channel].active_power[0]*1000*1000 ;
+        power_calib_count[channel][0]++;
+    }
+    if (channel_measurements[channel].active_power[1] > 0) {
+        power_sum_uw[channel][1] += channel_measurements[channel].active_power[1]*1000*1000;
+        power_calib_count[channel][1]++;
+    }
+    if (channel_measurements[channel].active_power[2] > 0) {
+        power_sum_uw[channel][2] += channel_measurements[channel].active_power[2]*1000*1000;
+        power_calib_count[channel][2]++;
+    }
 }
+
+void process_calibrate(void)
+{
+    for (int i = 0; i < 4; i++) {
+        if (voltage_calib_count[i] > 0) {
+            channel_measurements[i].voltage = voltage_sum_uv[i] / voltage_calib_count[i];
+        }
+    }
+}
+
+
+
 
 // Khai báo biến điều khiển LED từ main.cpp
 extern volatile bool ledBlinkEnable;
@@ -180,7 +270,9 @@ void start_process(void)
 {
   // turn on all relay
    uint32_t start_time_ms = millis();
-
+   // turn on all relay
+   relayService.turnOffAll();
+   zero_detect_process();
    delayWithBlink(10);
    // Bật blink LED
    ledBlinkEnable = true;
@@ -196,40 +288,23 @@ void start_process(void)
    }
 
    // Đọc từ tất cả 4 kênh BL0906
-   for (int i = 0; i < 4; i++) {
-       if (uartBl0906[i] != NULL) {
-           read_bl0906_channel(i, uartBl0906[i]);
-       }
-       delayWithBlink(2);
-   }
-   // Đợi 3 giây và đo zero detect trong lúc này
-   // Reset zero detect count trước khi đo
-   // (zero_detect_process sẽ tự reset và đo trong 2 giây)
-   zero_detect_process();
-   
+   for (int j = 0; j < 5; j++) {
+        static uint32_t calib_start_time_ms = millis();
+        if (millis() - calib_start_time_ms > 1000) {
+            break;
+        }
+        for (int i = 0; i < 4; i++) {
+                read_bl0906_channel(i, uartBl0906[i]);
+                delayWithBlink(2);    
+        }
+        while (millis() - calib_start_time_ms < 650) {
+            delayWithBlink(5);
+        }
+  }
+  
    // Kiểm tra kết quả và điều khiển relay
    for (int i = 0; i < 4; i++) {
        is_channel_pass(i);
-       
-       // Debug: In giá trị để kiểm tra
-       /*
-              UART_DEBUG.print("Channel ");
-       UART_DEBUG.print(i);
-       UART_DEBUG.print(" - Zero detect: ");
-   
-       UART_DEBUG.print(zero_ok ? "PASS" : "FAIL");
-       UART_DEBUG.print(", Current_1_ok: ");
-
-       UART_DEBUG.print(channel_measurements[i].current_1_ok);
-       UART_DEBUG.print(", Current_2_ok: ");
-       UART_DEBUG.print(channel_measurements[i].current_2_ok);
-       UART_DEBUG.print(", Current_3_ok: ");
-       UART_DEBUG.println(channel_measurements[i].current_3_ok);
-       
-       
-       
-       */
-
        // Kiểm tra zero detect: nếu không pass thì tắt tất cả relay của kênh đó
        bool zero_ok = zero_detect_get_result(i);
        if(!zero_ok) {
