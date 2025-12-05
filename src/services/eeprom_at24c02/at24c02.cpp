@@ -1,11 +1,10 @@
 #include "at24c02.h"
 #include "../software_i2c/software_i2c.h"
+#include "../../config.h"
 
-void at24c02_init(void) {
-  for (int i = 1; i <= 4; i++) {
-    i2c_select_bus(i);
+void at24c02_init(uint8_t bus_num) {
+    i2c_select_bus(bus_num);
     i2c_init();
-  }
 }
 
 void at24c02_write(uint8_t address, uint8_t data) {
@@ -70,4 +69,17 @@ void at24c02_read_block(uint8_t address, uint8_t* data, uint8_t length) {
     }
     
     i2c_stop();
+}
+
+void at24c02_test(uint8_t bus_num) {
+    //read channel 0
+    at24c02_init(bus_num);
+    uint8_t block_to_read[14];
+    at24c02_read_block(0x00, block_to_read, 14);
+    //print block_to_read
+    for(int i = 0; i < 14; i++){
+        UART_DEBUG.print(block_to_read[i]);
+        UART_DEBUG.print(" ");
+    }
+    UART_DEBUG.println();
 }

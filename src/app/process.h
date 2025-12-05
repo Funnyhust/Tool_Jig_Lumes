@@ -9,37 +9,19 @@ class RelayService;
 // Biến để điều khiển blink LED từ process
 extern volatile bool ledBlinkEnable;
 
-#define VOLTAGE_THRESHOLD 230
-#define CURRENT_THRESHOLD 10
-#define ACTIVE_POWER_THRESHOLD 10
-
-#define VOLTAGE_THRESHOLD_LOW 215
-#define CURRENT_THRESHOLD_LOW 196
-#define ACTIVE_POWER_THRESHOLD_LOW 43
-
-#define VOLTAGE_THRESHOLD_HIGH 240
-#define CURRENT_THRESHOLD_HIGH 199
-#define ACTIVE_POWER_THRESHOLD_HIGH 45
-
-
-
+// Ngưỡng mặc định dùng để tính hệ số calibration
+// Đơn vị:
+// - Điện áp: mV
+// - Dòng điện: mA
+// - Công suất: mW
+extern const uint32_t VOLTAGE_THRESHOLD_DEFAULT[4];    // mV
+extern const uint32_t CURRENT_THRESHOLD_DEFAULT[4][3]; // mA
+extern const uint32_t POWER_THRESHOLD_DEFAULT[4][3];   // mW
 
 extern bool zero_detect_result[4];  // Kết quả zero detect cho 4 kênh
 
 // Khai báo hàm khởi tạo
-
 void process_init(void);
 void start_process(void);
-
-// typedef struct {
-//     uint16_t voltage;
-//     uint16_t current_1;
-//     uint16_t current_2;
-//     uint16_t current_3;
-//     bool voltage_ok=false;
-//     bool current_1_ok=false;
-//     bool current_2_ok=false;
-//     bool current_3_ok=false;
-// } measurement_value_t;
 
 #endif

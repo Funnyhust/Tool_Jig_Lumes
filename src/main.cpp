@@ -3,6 +3,8 @@
 #include "services/relay/relay_service.h"
 #include "app/process.h"
 #include "services/zero_detect/zero_detect.h"
+#include "services/eeprom_at24c02/at24c02.h"
+#include "config.h"
 
 RelayService relayService;
 
@@ -43,6 +45,9 @@ void setup() {
 }
 
 void loop() {
+    UART_DEBUG.println("Loop test read EEPROM");
+    at24c02_test(1);
+    delay(3000);
     // Blink LED trong lúc chờ giữa các lần test
 
 }

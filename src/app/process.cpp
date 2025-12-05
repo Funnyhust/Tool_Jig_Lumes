@@ -9,6 +9,14 @@
 #include "../config.h"
 #include "../services/eeprom_at24c02/at24c02.h"
 // Khai báo hàm delay có blink LED từ main.cpp
+
+
+//Note hardware
+//M2 SCL
+//M3 SDA
+
+
+
 extern void delayWithBlink(uint32_t ms);
 
 // 4 uart bl0906, 1 uart debug
@@ -29,7 +37,9 @@ uint8_t voltage_calib_count[4] = {0, 0, 0, 0};
 uint8_t current_calib_count[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
 uint8_t power_calib_count[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
 
+
 uint32_t voltage_calib_value[4] = {0, 0, 0, 0};
+//đơn vị uV 4 channel, 3 current
 uint32_t current_calib_value[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
 uint32_t power_calib_value[4][3] = {{0, 0, 0},{0, 0, 0},{0, 0, 0},{0, 0, 0}};
 
@@ -40,7 +50,30 @@ uint16_t kPower[4][3];
 
 uint8_t eeprom_value[4][16];
 
-static void process_calibrate(int channel){
+// Giá trị ngưỡng mặc định (đơn vị như comment trong process.h)
+const uint32_t VOLTAGE_THRESHOLD_DEFAULT[4] = {
+    220000, 220000, 220000, 220000   // mV
+};
+
+const uint32_t CURRENT_THRESHOLD_DEFAULT[4][3] = {
+    {182800, 185300, 185500},        // kênh 0
+    {185000, 185000, 185000},        // kênh 1
+    {185000, 185000, 185000},        // kênh 2
+    {185000, 185000, 185000}         // kênh 3
+}; // mA
+
+const uint32_t POWER_THRESHOLD_DEFAULT[4][3] = {
+    {40330, 40730, 40810},           // kênh 0
+    {40780, 40670, 41410},           // kênh 1
+    {40470, 40540, 40890},           // kênh 2
+    {40420, 41100, 40710}            // kênh 3
+}; // mW
+
+
+
+
+
+static void process_calibrate(){
     for(int i = 0; i < 4; i++){
         if(voltage_calib_count[i] > 0){
             voltage_calib_value[i] = voltage_sum_uv[i] / voltage_calib_count[i];
@@ -70,7 +103,7 @@ void prepare_wrire_eeprom_value(void){
     for(int i = 0; i < 4; i++){
         eeprom_value[i][0] = kVoltage[i];
         eeprom_value[i][1] = kVoltage[i] >> 8;
-        for(int j = 0; j < 6; j++){
+        for(int j = 0; j < 3; j++){
             eeprom_value[i][j*2+2] = kCurrent[i][j];  
             eeprom_value[i][j*2+2+1] = kCurrent[i][j] >> 8;
         }
@@ -78,16 +111,57 @@ void prepare_wrire_eeprom_value(void){
             eeprom_value[i][j*2+8] = kPower[i][j];
             eeprom_value[i][j*2+8+1] = kPower[i][j] >> 8;
         }
+        //2 byte cuối bằng 0
+        eeprom_value[i][14] = 0;
+        eeprom_value[i][15] = 0;
     }
-    //2 byte cuối bằng 0
-    eeprom_value[i][15] = 0;
-    eeprom_value[i][16] = 0;
+
+
 }
 
+static uint8_t page_to_write[8];
+static uint8_t block_to_read[14];
+static bool write_eeprom_success[4] = {false, false, false, false};
 void write_eeprom_value(void){
-    for(int i = 0; i < 4; i++){
-        at24c02_write_block(i*16, eeprom_value[i], 16);
+    for(int ch = 0; ch < 4; ch++){
+        at24c02_init(ch+1);
+        delayWithBlink(10);
+        for(int j = 0; j < 3; j++){ // retry max 3 times
+            //Ghi page địa chỉ 0x00 - 0x07  
+            for(int k = 0; k < 8; k++){
+                page_to_write[k] = eeprom_value[ch][k];
+            }
+            at24c02_write_block(0x00, page_to_write, 8);
+            delayWithBlink(50);
+            //Ghi page địa chỉ 0x08 - 0x0F
+            for(int k = 0; k < 8; k++){
+                page_to_write[k] = eeprom_value[ch][k+8];
+                }
+            at24c02_write_block(0x08, page_to_write, 8);
+            delayWithBlink(50);
+            //Đọc page địa chỉ 0x00 - 0x0D
+            at24c02_read_block(0x00, block_to_read, 14);
+            //Kiểm tra giá trị đọc được có giống với giá trị ghi vào không
+            bool ok = true;
+            for(int k = 0; k < 14; k++){
+                if(block_to_read[k] != eeprom_value[ch][k]){
+                    ok = false;
+                    break;
+                }
+            }
+            if(ok){
+                //Nếu ghi thành công thì không retry nữa
+                write_eeprom_success[ch] = true;
+                break;
+            }
+            }
+        }
     }
+
+void start_write_eeprom_value(void){    
+       process_calibrate();
+       prepare_wrire_eeprom_value();
+       write_eeprom_value();
 }
 
 // Kết quả zero detect cho 4 kênh
@@ -123,7 +197,51 @@ static void is_channel_pass(int channel)
     channel_measurements[channel].power_3_ok = (power_3 >= POWER_THRESHOLD_LOW && power_3 <= POWER_THRESHOLD_HIGH);
 }
 
-
+void check_channel_pass(int channel){
+    //kiểm tra theo giá trị calib
+    if((kVoltage[channel] <900) || (kVoltage[channel] > 1100)){
+        channel_measurements[channel].voltage_ok = false;
+    }
+    else {
+        channel_measurements[channel].voltage_ok = true;
+    }
+    if((kCurrent[channel][0] <900) || (kCurrent[channel][0] > 1100)){
+        channel_measurements[channel].current_1_ok = false;
+    }
+    else {
+        channel_measurements[channel].current_1_ok = true;
+    }
+    if((kCurrent[channel][1] <900) || (kCurrent[channel][1] > 1100)){
+        channel_measurements[channel].current_2_ok = false;
+    }
+    else {
+        channel_measurements[channel].current_2_ok = true;
+    }
+    if((kCurrent[channel][2] <900) || (kCurrent[channel][2] > 1100)){
+        channel_measurements[channel].current_3_ok = false;
+    }
+    else {
+        channel_measurements[channel].current_3_ok = true;
+    }
+    if((kPower[channel][0] <900) || (kPower[channel][0] > 1100)){
+        channel_measurements[channel].power_1_ok = false;
+    }
+    else {
+        channel_measurements[channel].power_1_ok = true;
+    }
+    if((kPower[channel][1] <900) || (kPower[channel][1] > 1100)){
+        channel_measurements[channel].power_2_ok = false;
+    }
+    else {
+        channel_measurements[channel].power_2_ok = true;
+    }
+    if((kPower[channel][2] <900) || (kPower[channel][2] > 1100)){
+        channel_measurements[channel].power_3_ok = false;
+    }
+    else {
+        channel_measurements[channel].power_3_ok = true;
+    }
+}
 
 
 // Khởi tạo bl0906
@@ -219,23 +337,23 @@ static void read_bl0906_channel(int channel, UartService* uart)
     bl0906_get_voltage();
     bl0906_get_active_power();
 
-    // Lưu giá trị vào mảng của kênh này ngay sau khi đọc giá trị đơn vị uV, uA, uW
+    // Lưu giá trị vào mảng của kênh này ngay sau khi đọc giá trị đơn vị uV, pA, uW
     channel_measurements[channel] = bl0906_get_all_measurements(); 
     if (channel_measurements[channel].voltage > 0) {
     voltage_sum_uv[channel] += channel_measurements[channel].voltage*1000*1000;
     voltage_calib_count[channel]++;
     }
     if (channel_measurements[channel].current[0] > 0) {     
-        current_sum_ua[channel][0] += channel_measurements[channel].current[0]*1000;
-        current_calib_count[0][channel]++;
+        current_sum_ua[channel][0] += channel_measurements[channel].current[0]*1000*1000;
+        current_calib_count[channel][0]++;
     }
     if (channel_measurements[channel].current[1] > 0) {
-        current_sum_ua[channel][1] += channel_measurements[channel].current[1]*1000;
-        current_calib_count[1][channel]++;
+        current_sum_ua[channel][1] += channel_measurements[channel].current[1]*1000*1000;
+        current_calib_count[channel][1]++;
     }
     if (channel_measurements[channel].current[2] > 0) {
-        current_sum_ua[channel][2] += channel_measurements[channel].current[2]*1000;
-        current_calib_count[2][channel]++;
+        current_sum_ua[channel][2] += channel_measurements[channel].current[2]*1000*1000;
+        current_calib_count[channel][2]++;
     }
     if (channel_measurements[channel].active_power[0] > 0) {
         power_sum_uw[channel][0] += channel_measurements[channel].active_power[0]*1000*1000 ;
@@ -251,15 +369,6 @@ static void read_bl0906_channel(int channel, UartService* uart)
     }
 }
 
-void process_calibrate(void)
-{
-    for (int i = 0; i < 4; i++) {
-        if (voltage_calib_count[i] > 0) {
-            channel_measurements[i].voltage = voltage_sum_uv[i] / voltage_calib_count[i];
-        }
-    }
-}
-
 
 
 
@@ -271,7 +380,7 @@ void start_process(void)
   // turn on all relay
    uint32_t start_time_ms = millis();
    // turn on all relay
-   relayService.turnOffAll();
+   relayService.turnOnAll();
    zero_detect_process();
    delayWithBlink(10);
    // Bật blink LED
@@ -289,7 +398,7 @@ void start_process(void)
 
    // Đọc từ tất cả 4 kênh BL0906
    for (int j = 0; j < 5; j++) {
-        static uint32_t calib_start_time_ms = millis();
+        uint32_t calib_start_time_ms = millis();
         if (millis() - calib_start_time_ms > 1000) {
             break;
         }
@@ -297,10 +406,14 @@ void start_process(void)
                 read_bl0906_channel(i, uartBl0906[i]);
                 delayWithBlink(2);    
         }
+        if(j<4){
         while (millis() - calib_start_time_ms < 650) {
             delayWithBlink(5);
         }
+        }
   }
+
+  start_write_eeprom_value();
   
    // Kiểm tra kết quả và điều khiển relay
    for (int i = 0; i < 4; i++) {
@@ -309,31 +422,43 @@ void start_process(void)
        bool zero_ok = zero_detect_get_result(i);
        if(!zero_ok) {
            // Zero detect fail - tắt cả 3 relay của kênh này
-           UART_DEBUG.print("Zero detect fail for channel: ");
-           UART_DEBUG.println(i);
-           zero_detect_result[i] = false;
-           relayService.setRelayState(i*3, false);
-           relayService.setRelayState(i*3+1, false);
-           relayService.setRelayState(i*3+2, false);
+        //    UART_DEBUG.print("Zero detect fail for channel: ");
+        //    UART_DEBUG.println(i);
+        //    zero_detect_result[i] = false;
+        //    relayService.setRelayState(i*3, false);
+        //    relayService.setRelayState(i*3+1, false);
+        //    relayService.setRelayState(i*3+2, false);
        } else {
-           // Zero detect pass - điều khiển relay theo kết quả current
-           zero_detect_result[i] = true;
-           UART_DEBUG.print("Channel ");
-           UART_DEBUG.print(i);
-           UART_DEBUG.print(" - Setting relays: ");
-           UART_DEBUG.print(channel_measurements[i].current_1_ok);
-           UART_DEBUG.print(", ");
-           UART_DEBUG.print(channel_measurements[i].current_2_ok);
-           UART_DEBUG.print(", ");
-           UART_DEBUG.println(channel_measurements[i].current_3_ok);
-           relayService.setRelayState(i*3, channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok);
-           relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok);
-           relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok&channel_measurements[i].power_3_ok);
+        check_channel_pass(i);
+        if(!channel_measurements[i].voltage_ok){
+            relayService.setRelayState(i*3, false);
+            relayService.setRelayState(i*3+1, false);
+            relayService.setRelayState(i*3+2, false);
+        }
+        else {
+            relayService.setRelayState(i*3, channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok);
+            relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok);
+            relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok&channel_measurements[i].power_3_ok); 
+        }
        }
    }
+    //Write eeprom status
+    for(int i = 0; i < 4; i++){
+        UART_DEBUG.print("Write eeprom is:");
+        UART_DEBUG.print(write_eeprom_success[i] ? "Success" : "Fail");
+        UART_DEBUG.print(" for channel: ");
+        UART_DEBUG.println(i);
+    }
 
+    //Print kVoltage, kCurrent, kPower
+    UART_DEBUG.print("kVoltage: ");
+    UART_DEBUG.println(kVoltage[0]);
+    UART_DEBUG.print("kCurrent: ");
+    UART_DEBUG.println(kCurrent[0][0]);
+    UART_DEBUG.print("kPower: ");
+    UART_DEBUG.println(kPower[0][0]);
+    UART_DEBUG.println("Process done");
     UART_DEBUG.print("Time process: ");
     UART_DEBUG.println(millis() - start_time_ms);
-
 }
 
