@@ -4,6 +4,7 @@
 #include "app/process.h"
 #include "services/zero_detect/zero_detect.h"
 #include "services/eeprom_at24c02/at24c02.h"
+#include "services/write_memory/write_memory.h"
 #include "config.h"
 
 RelayService relayService;
@@ -38,6 +39,7 @@ void setup() {
     digitalWrite(LED_PIN, LOW);
     relayService.init();
     process_init();
+    first_write_memory_all_channels();
     ledBlinkEnable = true;
     start_process();
     ledBlinkEnable = false;
@@ -45,9 +47,8 @@ void setup() {
 }
 
 void loop() {
-    UART_DEBUG.println("Loop test read EEPROM");
-    at24c02_test(1);
-    delay(3000);
-    // Blink LED trong lúc chờ giữa các lần test
-
+    if(UART_DEBUG.available()){
+        uint8_t data = UART_DEBUG.read();
+        write_memory_process(data);
+    }
 }

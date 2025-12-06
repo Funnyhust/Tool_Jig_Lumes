@@ -795,13 +795,15 @@ static void bl0906_read_register(uint8_t address)
 	DBG_BL0906_SEND_BYTE(address);
 	
 	// Đợi một chút để thiết bị có thời gian phản hồi
-	// Khi debug bật, các print statements trên tạo delay tự nhiên (~10-20ms)
-	// Khi debug tắt, cần delay này để đảm bảo BL0906 có đủ thời gian xử lý
-	delay(15);  // Tăng từ 5ms lên 15ms để bù thời gian debug output 
+	// Theo tài liệu: thời gian từ khi MCU gửi xong đến khi BL0906 bắt đầu gửi byte đầu tiên là 120µs
+	// Để an toàn, delay 1ms (đủ cho 120µs + margin)
+	delay(1);
 	
 	// Đợi cho đến khi có đủ bytes trong buffer hoặc timeout
+	// Theo tài liệu: frame timeout tối đa là khoảng 16ms
+	// Để an toàn, timeout 20ms (đủ cho 16ms + margin)
 	uint32_t start_time = millis();
-	uint32_t timeout_ms = 50; // Timeout 500ms (tăng lên để đợi lâu hơn)
+	uint32_t timeout_ms = 20; // Giảm từ 30ms xuống 20ms theo tài liệu (frame timeout max ~16ms)
 	uint8_t available_bytes = 0;
 	while ((available_bytes = serial->available()) < BL0906_RX_LEN) {
 		if ((millis() - start_time) >= timeout_ms) {
@@ -827,7 +829,7 @@ static void bl0906_read_register(uint8_t address)
 			}
 			return;
 		}
-		delay(5); // Đợi 5ms mỗi lần (giảm số lần check)
+		delay(1); // Giảm xuống 1ms để check nhanh hơn (theo tài liệu chỉ cần 120µs)
 	}
 	
 	// Đọc phản hồi (4 bytes: 3 bytes data + 1 byte checksum)
@@ -967,11 +969,9 @@ static void bl0906_read_register(uint8_t address)
  */
 void bl0906_send_get_current(void)
 {
-	bl0906_read_register(I1_RMS);
-	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
-	bl0906_read_register(I2_RMS);
-	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
-	bl0906_read_register(I3_RMS);
+	bl0906_read_register(I1_RMS); // Không cần delay vì đã có trong bl0906_read_register()
+	bl0906_read_register(I2_RMS);  // Không cần delay vì đã có trong bl0906_read_register()
+	bl0906_read_register(I3_RMS);  // Không cần delay vì đã có trong bl0906_read_register()
 }
 
 /**
@@ -994,10 +994,8 @@ void bl0906_get_voltage(void)
 void bl0906_get_active_power(void)
 {
 	bl0906_read_register(WATT_1);
-	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
 	bl0906_read_register(WATT_2);
-	delay(10);  // Delay giữa các lần đọc để BL0906 có thời gian xử lý
-	bl0906_read_register(WATT_3);
+	bl0906_read_register(WATT_3);  // Không cần delay vì đã có trong bl0906_read_register()
 }
 
 /**
