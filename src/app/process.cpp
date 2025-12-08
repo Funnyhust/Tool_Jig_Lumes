@@ -71,17 +71,28 @@ uint32_t POWER_THRESHOLD_VALUE[4][3];
 
 
 static void process_calibrate(){
+
     for(int i = 0; i < 4; i++){
         if(voltage_calib_count[i] > 0){
             voltage_calib_value[i] = voltage_sum_uv[i] / voltage_calib_count[i];
-            kVoltage[i] = (1000*VOLTAGE_THRESHOLD_VALUE[i])/voltage_calib_value[i];
+            if(voltage_calib_value[i] > 0){
+                kVoltage[i] = ((1000*VOLTAGE_THRESHOLD_VALUE[i])/voltage_calib_value[i]);
+            }
+            else {
+                kVoltage[i] = 0;
+            }
         }
     }
     for(int i = 0; i < 4; i++){
         for(int j = 0; j < 3; j++){
             if(current_calib_count[i][j] > 0){
                 current_calib_value[i][j] = current_sum_ua[i][j] / current_calib_count[i][j];
-                kCurrent[i][j] = (1000*CURRENT_THRESHOLD_VALUE[i][j])/current_calib_value[i][j];
+                if(current_calib_value[i][j] > 0){
+                    kCurrent[i][j] = ((1000*CURRENT_THRESHOLD_VALUE[i][j])/current_calib_value[i][j]);
+                }
+                else {
+                    kCurrent[i][j] = 0;
+                }
             }
         }
     }
@@ -89,7 +100,12 @@ static void process_calibrate(){
         for(int j = 0; j < 3; j++){
             if(power_calib_count[i][j] > 0){
                 power_calib_value[i][j] = power_sum_uw[i][j] / power_calib_count[i][j];
-                kPower[i][j] = (1000*POWER_THRESHOLD_VALUE[i][j])/power_calib_value[i][j];
+                if(power_calib_value[i][j] > 0){
+                    kPower[i][j] = ((1000*POWER_THRESHOLD_VALUE[i][j])/power_calib_value[i][j]);
+                }
+                else {
+                    kPower[i][j] = 0;
+                }
             }
         }
     }
@@ -211,7 +227,7 @@ void check_channel_pass(int channel){
     }
     PROCESS_UART_DEBUG_PRINT("He so calib: ");
     PROCESS_UART_DEBUG_PRINT(" channel: ");
-    PROCESS_UART_DEBUG_PRINT(channel);
+    PROCESS_UART_DEBUG_PRINT(channel+1);
     PROCESS_UART_DEBUG_PRINT("   ||kV: ");
     PROCESS_UART_DEBUG_PRINT(kVoltage[channel]);
     PROCESS_UART_DEBUG_PRINT("   ||kI0: ");
@@ -362,7 +378,7 @@ static void read_bl0906_channel(int channel, UartService* uart)
     }
     uint32_t t9 = millis();
     PROCESS_UART_DEBUG_PRINT("Channel: ");
-    PROCESS_UART_DEBUG_PRINT(channel);
+    PROCESS_UART_DEBUG_PRINT(channel+1);
     PROCESS_UART_DEBUG_PRINT("   ||Voltage: ");
     PROCESS_UART_DEBUG_PRINT(channel_measurements[channel].voltage);
     PROCESS_UART_DEBUG_PRINT("   ||Current 0: ");
@@ -403,7 +419,7 @@ void start_process(void)
            delay(5);  // Đợi UART được set xong
            bl0906_set_channel(i);
            PROCESS_UART_DEBUG_PRINT("Gia tri tai chuan ");
-           PROCESS_UART_DEBUG_PRINT(i);
+           PROCESS_UART_DEBUG_PRINT(i+1);
            PROCESS_UART_DEBUG_PRINT("   ||Voltage: ");
            PROCESS_UART_DEBUG_PRINT((float)VOLTAGE_THRESHOLD_VALUE[i]/1000);
            PROCESS_UART_DEBUG_PRINT("   ||Current 0: ");
@@ -442,24 +458,25 @@ void start_process(void)
         }
   }
   start_write_eeprom_value();
+  for(int i = 0; i < 4; i++){
+    check_channel_pass(i);
+  }
   
    // Kiểm tra kết quả và điều khiển relay
    for (int i = 0; i < 4; i++) {
        // Kiểm tra zero detect: nếu không pass thì tắt tất cả relay của kênh đó
        bool zero_ok = zero_detect_get_result(i);
-       if(!zero_ok) {
+       if(!zero_ok && i==1) {
            // Zero detect fail - tắt cả 3 relay của kênh này
            PROCESS_UART_DEBUG_PRINT("Zero detect is fail for channel: ");
-           PROCESS_UART_DEBUG_PRINTLN(i);
-
-           zero_detect_result[i] = false;
+           PROCESS_UART_DEBUG_PRINTLN(i+1);
            relayService.setRelayState(i*3, false);
            relayService.setRelayState(i*3+1, false);
            relayService.setRelayState(i*3+2, false);
        } else {
         PROCESS_UART_DEBUG_PRINT("Zero detect is pass for channel: ");
-        PROCESS_UART_DEBUG_PRINTLN(i);
-        check_channel_pass(i);
+        PROCESS_UART_DEBUG_PRINTLN(i+1);
+    
         if(!channel_measurements[i].voltage_ok){
             relayService.setRelayState(i*3, false);
             relayService.setRelayState(i*3+1, false);
@@ -482,7 +499,7 @@ void start_process(void)
         PROCESS_UART_DEBUG_PRINT("Write eeprom is:");
         PROCESS_UART_DEBUG_PRINT(write_eeprom_success[i] ? "Success" : "Fail");
         PROCESS_UART_DEBUG_PRINT(" for channel: ");
-        PROCESS_UART_DEBUG_PRINTLN(i);
+        PROCESS_UART_DEBUG_PRINTLN(i+1);
     }
 
     UART_DEBUG.println("Process done");

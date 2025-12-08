@@ -30,6 +30,7 @@ extern "C" {
 
 typedef struct {
     uint8_t channel;
+    uint8_t sub_channel;
     uint32_t voltage_threshold;
     uint32_t current_threshold[4][3];
     uint32_t power_threshold[4][3];
