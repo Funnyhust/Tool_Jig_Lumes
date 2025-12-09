@@ -39,7 +39,7 @@ void setup() {
     digitalWrite(LED_PIN, LOW);
     relayService.init();
     process_init();
-    first_write_memory_all_channels();
+    //first_write_memory_all_channels();
     ledBlinkEnable = true;
     start_process();
     ledBlinkEnable = false;

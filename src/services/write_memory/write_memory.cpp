@@ -39,7 +39,7 @@ static const uint16_t MEMORY_ADDR_CHANNEL[4] = {
     MEMORY_ADDR_CHANNEL_3
 };
 
-static uint8_t rx_setting_buffer[13];
+static uint8_t rx_setting_buffer[11];
 static uint8_t rx_setting_buffer_index = 0;
 static bool check_setting_buffer_full = false;
     
@@ -57,7 +57,7 @@ static void add_to_setting_buffer(uint8_t data){
     }
     rx_setting_buffer[rx_setting_buffer_index] = data;
     rx_setting_buffer_index++;
-    if(rx_setting_buffer_index == 13){
+    if(rx_setting_buffer_index == 11){
         check_setting_buffer_full = true;
     }
     last_time_rx_setting_buffer = time_rx_setting_buffer;
@@ -65,15 +65,15 @@ static void add_to_setting_buffer(uint8_t data){
 
 static bool calculate_checksum(void){
     uint8_t checksum = 0;
-    for(int i = 1; i < 12; i++){
+    for(int i = 0; i < 10; i++){
         checksum += rx_setting_buffer[i];
     }
     checksum = ~checksum;  // Sửa syntax: phải dùng = thay vì ~=
     UART_DEBUG.print("Checksum: ");
-    UART_DEBUG.println(rx_setting_buffer[12]);
+    UART_DEBUG.println(rx_setting_buffer[10]);
     UART_DEBUG.print("Checksum expected: ");
     UART_DEBUG.println(checksum);
-    return checksum == rx_setting_buffer[12];
+    return checksum == rx_setting_buffer[10];
 }
 
 static bool check_valid_frame(void){
@@ -106,25 +106,20 @@ static bool mapping_process(){
         UART_DEBUG.print("Invalid channel or sub_channel");
         return false;
     }
-    
-    // Byte 2-3: voltage_threshold (2 bytes, nhân 1000)
-    data = ((uint32_t)rx_setting_buffer[2] << 8 | (uint32_t)rx_setting_buffer[3]) * 1000;
-    setting_data.voltage_threshold = data;
-    
-    // Byte 4-7: current_threshold (4 bytes)
-    data = ((uint32_t)rx_setting_buffer[4] << 24) | 
-           ((uint32_t)rx_setting_buffer[5] << 16) | 
-           ((uint32_t)rx_setting_buffer[6] << 8) | 
-           (uint32_t)rx_setting_buffer[7];
+     
+    // Byte 2-5: current_threshold (4 bytes)
+    data = ((uint32_t)rx_setting_buffer[2] << 24) | 
+           ((uint32_t)rx_setting_buffer[3] << 16) | 
+           ((uint32_t)rx_setting_buffer[4] << 8) | 
+           (uint32_t)rx_setting_buffer[5];
     setting_data.current_threshold[setting_data.channel][setting_data.sub_channel] = data;
     
-    // Byte 8-11: power_threshold (4 bytes)
-    data = ((uint32_t)rx_setting_buffer[8] << 24) | 
-           ((uint32_t)rx_setting_buffer[9] << 16) | 
-           ((uint32_t)rx_setting_buffer[10] << 8) | 
-           (uint32_t)rx_setting_buffer[11];
+    // Byte 6-9: power_threshold (4 bytes)
+    data = ((uint32_t)rx_setting_buffer[6] << 24) | 
+           ((uint32_t)rx_setting_buffer[7] << 16) | 
+           ((uint32_t)rx_setting_buffer[8] << 8) | 
+           (uint32_t)rx_setting_buffer[9];
     setting_data.power_threshold[setting_data.channel][setting_data.sub_channel] = data;
-    
     return true;
 }
 
@@ -155,9 +150,6 @@ static void write_memory_to_eeprom_channel(uint8_t channel, uint8_t sub_channel)
     }
     
     uint16_t base_addr = MEMORY_ADDR_CHANNEL[channel];
-    
-    // Ghi voltage_threshold (4 bytes) - dùng EEPROM.put() để ghi cả uint32_t
-    EEPROM.put(base_addr, setting_data.voltage_threshold);
     
     // Ghi current_threshold cho sub_channel này
     // Offset: base_addr + 4 (bỏ qua voltage) + sub_channel * 4

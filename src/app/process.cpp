@@ -11,6 +11,9 @@
 #include "../services/write_memory/write_memory.h"
 
 
+#define LOW_THRESHOLD 850
+#define HIGH_THRESHOLD 1150
+
 #if PROCESS_DEBUG_ENABLE
 #define PROCESS_UART_DEBUG_PRINT(x) UART_DEBUG.print(x)
 #define PROCESS_UART_DEBUG_PRINTLN(x) UART_DEBUG.println(x)
@@ -183,43 +186,43 @@ bool zero_detect_result[4] = {true, true, true, true};
 
 void check_channel_pass(int channel){
     //kiểm tra theo giá trị calib
-    if((kVoltage[channel] <900) || (kVoltage[channel] > 1100)){
+    if((kVoltage[channel] <LOW_THRESHOLD) || (kVoltage[channel] > HIGH_THRESHOLD)){
         channel_measurements[channel].voltage_ok = false;
     }
     else {
         channel_measurements[channel].voltage_ok = true;
     }
-    if((kCurrent[channel][0] <900) || (kCurrent[channel][0] > 1100)){
+    if((kCurrent[channel][0] <LOW_THRESHOLD) || (kCurrent[channel][0] > HIGH_THRESHOLD)){
         channel_measurements[channel].current_1_ok = false;
     }
     else {
         channel_measurements[channel].current_1_ok = true;
     }
-    if((kCurrent[channel][1] <900) || (kCurrent[channel][1] > 1100)){
+    if((kCurrent[channel][1] <LOW_THRESHOLD) || (kCurrent[channel][1] > HIGH_THRESHOLD)){
         channel_measurements[channel].current_2_ok = false;
     }
     else {
         channel_measurements[channel].current_2_ok = true;
     }
-    if((kCurrent[channel][2] <900) || (kCurrent[channel][2] > 1100)){
+    if((kCurrent[channel][2] <LOW_THRESHOLD) || (kCurrent[channel][2] > HIGH_THRESHOLD)){
         channel_measurements[channel].current_3_ok = false;
     }
     else {
         channel_measurements[channel].current_3_ok = true;
     }
-    if((kPower[channel][0] <900) || (kPower[channel][0] > 1100)){
+    if((kPower[channel][0] <LOW_THRESHOLD) || (kPower[channel][0] > HIGH_THRESHOLD)){
         channel_measurements[channel].power_1_ok = false;
     }
     else {
         channel_measurements[channel].power_1_ok = true;
     }
-    if((kPower[channel][1] <900) || (kPower[channel][1] > 1100)){
+    if((kPower[channel][1] <LOW_THRESHOLD) || (kPower[channel][1] > HIGH_THRESHOLD)){
         channel_measurements[channel].power_2_ok = false;
     }
     else {
         channel_measurements[channel].power_2_ok = true;
     }
-    if((kPower[channel][2] <900) || (kPower[channel][2] > 1100)){
+    if((kPower[channel][2] <LOW_THRESHOLD) || (kPower[channel][2] > HIGH_THRESHOLD)){
         channel_measurements[channel].power_3_ok = false;
     }
     else {
@@ -466,7 +469,7 @@ void start_process(void)
    for (int i = 0; i < 4; i++) {
        // Kiểm tra zero detect: nếu không pass thì tắt tất cả relay của kênh đó
        bool zero_ok = zero_detect_get_result(i);
-       if(!zero_ok && i==1) {
+       if((!zero_ok) || (!write_eeprom_success[i]) || (!channel_measurements[i].voltage_ok)) {
            // Zero detect fail - tắt cả 3 relay của kênh này
            PROCESS_UART_DEBUG_PRINT("Zero detect is fail for channel: ");
            PROCESS_UART_DEBUG_PRINTLN(i+1);
@@ -476,22 +479,9 @@ void start_process(void)
        } else {
         PROCESS_UART_DEBUG_PRINT("Zero detect is pass for channel: ");
         PROCESS_UART_DEBUG_PRINTLN(i+1);
-    
-        if(!channel_measurements[i].voltage_ok){
-            relayService.setRelayState(i*3, false);
-            relayService.setRelayState(i*3+1, false);
-            relayService.setRelayState(i*3+2, false);
-        }
-        else if(!write_eeprom_success[i]){
-            relayService.setRelayState(i*3, false);
-            relayService.setRelayState(i*3+1, false);
-            relayService.setRelayState(i*3+2, false);
-        }
-        else {
-            relayService.setRelayState(i*3, channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok);
-            relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok);
-            relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok&channel_measurements[i].power_3_ok); 
-        }
+        relayService.setRelayState(i*3, channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok);
+        relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok);
+        relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok&channel_measurements[i].power_3_ok); 
        }
    }
     //Write eeprom status
