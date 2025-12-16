@@ -12,14 +12,14 @@ uint32_t FIRST_WRITE_VOLTAGE_THRESHOLD[4] = {
 };
 
 uint32_t FIRST_WRITE_CURRENT_THRESHOLD[4][3] = {
-    {182800, 185300, 185500},        // kênh 1
+    {184400, 186500, 185900},        // kênh 1
     {185400, 184600, 188200},        // kênh 2
     {184700, 184000, 185600},        // kênh 3
     {183700, 186200, 185200}         // kênh 4
 }; // mA
 
 uint32_t FIRST_WRITE_POWER_THRESHOLD[4][3] = {
-    {40330, 40730, 40810},           // kênh 1
+    {40650, 40990, 40920},           // kênh 1
     {40780, 40670, 41410},           // kênh 2
     {40470, 40540, 40890},           // kênh 3
     {40420, 41100, 40710}            // kênh 4 Fake sai số để test case kênh sai quá 10%
@@ -47,7 +47,6 @@ static void reset_setting_buffer(void){
     rx_setting_buffer_index = 0;
     check_setting_buffer_full = false;
 }
-
 uint32_t time_rx_setting_buffer = 0;
 uint32_t last_time_rx_setting_buffer = 0;
 static void add_to_setting_buffer(uint8_t data){

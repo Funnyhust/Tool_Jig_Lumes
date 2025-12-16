@@ -4,6 +4,9 @@
 #include <Arduino.h>
 
 // Định nghĩa các cặp chân I2C
+//M2 SCL
+//M3 SDA
+
 #define SCL_PIN_1 PE13
 #define SDA_PIN_1 PE14
 #define SCL_PIN_2 PE15
@@ -12,8 +15,7 @@
 #define SDA_PIN_3 PB15
 #define SCL_PIN_4 PD8
 #define SDA_PIN_4 PD9
-#define SCL_PIN_5 PD10
-#define SDA_PIN_5 PD11
+
 
 // Biến global để lưu chân hiện tại đang sử dụng
 extern uint8_t SCL_PIN;

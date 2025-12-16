@@ -13,6 +13,7 @@ PD11 FSMC_A16
 */
 
 #include "software_i2c.h"
+#include "config.h"
 
 // Biến global để lưu chân hiện tại đang sử dụng
 uint8_t SCL_PIN = SCL_PIN_1;
@@ -20,7 +21,7 @@ uint8_t SDA_PIN = SDA_PIN_1;
 
 // Hàm delay cho I2C (tần số ~50 kHz với delay 10us)
 void i2c_delay() {
-    delayMicroseconds(10);
+    delayMicroseconds(20);
 }
 
 // Chọn bus I2C (1-5)
@@ -42,10 +43,7 @@ void i2c_select_bus(uint8_t bus_num) {
             SCL_PIN = SCL_PIN_4;
             SDA_PIN = SDA_PIN_4;
             break;
-        case 5:
-            SCL_PIN = SCL_PIN_5;
-            SDA_PIN = SDA_PIN_5;
-            break;
+
         default:
             // Mặc định bus 1 nếu bus_num không hợp lệ
             SCL_PIN = SCL_PIN_1;

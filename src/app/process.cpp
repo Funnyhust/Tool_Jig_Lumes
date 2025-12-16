@@ -159,7 +159,10 @@ void write_eeprom_value(void){
             at24c02_read_block(0x00, block_to_read, 14);
             //Kiểm tra giá trị đọc được có giống với giá trị ghi vào không
             bool ok = true;
+            // UART_DEBUG.println("EEPROM value: ");
+            // UART_DEBUG.println(ch);
             for(int k = 0; k < 14; k++){
+                //UART_DEBUG.println(block_to_read[k]);
                 if(block_to_read[k] != eeprom_value[ch][k]){
                     ok = false;
                     break;
@@ -168,6 +171,8 @@ void write_eeprom_value(void){
             if(ok){
                 //Nếu ghi thành công thì không retry nữa
                 write_eeprom_success[ch] = true;
+                // UART_DEBUG.println("Write EEPROM OK ");
+                // UART_DEBUG.println(ch);
                 break;
             }
             }
@@ -399,6 +404,48 @@ static void read_bl0906_channel(int channel, UartService* uart)
 }
 
 
+//====================LOGGING RESULT======================
+static void logging_result(){
+    for(int channel = 0; channel < 4; channel++){
+        UART_DEBUG.print("He so calib channel ");
+        UART_DEBUG.print(channel+1);
+        UART_DEBUG.print("   ||kV: ");
+        UART_DEBUG.print(kVoltage[channel]);
+        UART_DEBUG.print("   ||kI0: ");
+        UART_DEBUG.print(kCurrent[channel][0]);
+        UART_DEBUG.print("   ||kI1: ");
+        UART_DEBUG.print(kCurrent[channel][1]);
+        UART_DEBUG.print("   ||kI2: ");
+        UART_DEBUG.print(kCurrent[channel][2]);
+        UART_DEBUG.print("   ||kP0: ");
+        UART_DEBUG.print(kPower[channel][0]);
+        UART_DEBUG.print("   ||kP1: ");
+        UART_DEBUG.print(kPower[channel][1]);
+        UART_DEBUG.print("   ||kP2: ");
+        UART_DEBUG.println(kPower[channel][2]);
+    }
+
+    for(int i = 0; i < 4; i++){
+        UART_DEBUG.print("Voltage is ");
+        UART_DEBUG.print(channel_measurements[i].voltage_ok? "SUCCESS" : "FAIL");
+        UART_DEBUG.print(" for channel: ");
+        UART_DEBUG.println(i+1);
+    }
+    
+    for(int i = 0; i < 4; i++){
+        UART_DEBUG.print("Zero detect is ");
+        UART_DEBUG.print(zero_detect_get_result(i) ? "SUCCESS" : "FAIL");
+        UART_DEBUG.print(" for channel: ");
+        UART_DEBUG.println(i+1);
+    }
+    for(int i = 0; i < 4; i++){
+        UART_DEBUG.print("Write eeprom is ");
+        UART_DEBUG.print(write_eeprom_success[i] ? "SUCCESS" : "FAIL");
+        UART_DEBUG.print(" for channel: ");
+        UART_DEBUG.println(i+1);
+    }
+}
+
 
 
 // Khai báo biến điều khiển LED từ main.cpp
@@ -409,9 +456,9 @@ void start_process(void)
   // turn on all relay
    uint32_t start_time_ms = millis();
    // turn on all relay
+ 
    relayService.turnOnAll();
    zero_detect_process();
-   delayWithBlink(10);
    // Bật blink LED
    ledBlinkEnable = true;
    
@@ -455,7 +502,7 @@ void start_process(void)
             delayWithBlink(2);    
         }
         if(j<4){
-            while (millis() - calib_start_time_ms < 650) {
+            while (millis() - calib_start_time_ms < 750) {
                 delayWithBlink(5);
             }
         }
@@ -471,26 +518,37 @@ void start_process(void)
        bool zero_ok = zero_detect_get_result(i);
        if((!zero_ok) || (!write_eeprom_success[i]) || (!channel_measurements[i].voltage_ok)) {
            // Zero detect fail - tắt cả 3 relay của kênh này
-           PROCESS_UART_DEBUG_PRINT("Zero detect is fail for channel: ");
-           PROCESS_UART_DEBUG_PRINTLN(i+1);
            relayService.setRelayState(i*3, false);
            relayService.setRelayState(i*3+1, false);
            relayService.setRelayState(i*3+2, false);
        } else {
-        PROCESS_UART_DEBUG_PRINT("Zero detect is pass for channel: ");
-        PROCESS_UART_DEBUG_PRINTLN(i+1);
-        relayService.setRelayState(i*3, channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok);
-        relayService.setRelayState(i*3+1, channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok);
-        relayService.setRelayState(i*3+2, channel_measurements[i].current_3_ok&channel_measurements[i].power_3_ok); 
+        relayService.setRelayState(i*3, (channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok));
+        relayService.setRelayState(i*3+1, (channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok));
+        relayService.setRelayState(i*3+2, (channel_measurements[i].current_3_ok&channel_measurements[i].power_3_ok)); 
        }
    }
     //Write eeprom status
     for(int i = 0; i < 4; i++){
-        PROCESS_UART_DEBUG_PRINT("Write eeprom is:");
-        PROCESS_UART_DEBUG_PRINT(write_eeprom_success[i] ? "Success" : "Fail");
+        PROCESS_UART_DEBUG_PRINT("Voltage is:");
+        PROCESS_UART_DEBUG_PRINT(channel_measurements[i].voltage_ok? "SUCCESS" : "Fail");
         PROCESS_UART_DEBUG_PRINT(" for channel: ");
         PROCESS_UART_DEBUG_PRINTLN(i+1);
     }
+    
+    for(int i = 0; i < 4; i++){
+        PROCESS_UART_DEBUG_PRINT("Zero detect is:");
+        PROCESS_UART_DEBUG_PRINT(zero_detect_get_result(i) ? "SUCCESS" : "Fail");
+        PROCESS_UART_DEBUG_PRINT(" for channel: ");
+        PROCESS_UART_DEBUG_PRINTLN(i+1);
+    }
+    for(int i = 0; i < 4; i++){
+        PROCESS_UART_DEBUG_PRINT("Write eeprom is:");
+        PROCESS_UART_DEBUG_PRINT(write_eeprom_success[i] ? "SUCCESS" : "Fail");
+        PROCESS_UART_DEBUG_PRINT(" for channel: ");
+        PROCESS_UART_DEBUG_PRINTLN(i+1);
+    }
+
+    logging_result();
 
     UART_DEBUG.println("Process done");
     UART_DEBUG.print("Time process: ");

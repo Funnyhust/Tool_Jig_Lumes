@@ -12,6 +12,7 @@
 #define UART_BL0906_3 Serial4
 #define UART_BL0906_4 Serial5
 
-#define PROCESS_DEBUG_ENABLE true
+#define PROCESS_DEBUG_ENABLE false
+#define BL0906_DBG_EN false
 
 #endif

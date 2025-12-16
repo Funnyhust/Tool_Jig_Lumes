@@ -9,8 +9,9 @@
 #define ZERO_DETECT_PORT_3 PC2
 #define ZERO_DETECT_PORT_4 PC3
 
-
+void zero_detect_init_pin(void);
 void zero_detect_init(void);
+
 void zero_detect_process(void);
 bool zero_detect_get_result(uint8_t channel);  // Trả về count cho 4 kênh (counts phải có ít nhất 4 phần tử)
 

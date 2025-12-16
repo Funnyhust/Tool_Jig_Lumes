@@ -14,9 +14,9 @@ extern volatile bool ledBlinkEnable;
 // - Điện áp: mV
 // - Dòng điện: mA
 // - Công suất: mW
-extern const uint32_t VOLTAGE_THRESHOLD_DEFAULT[4];    // mV
-extern const uint32_t CURRENT_THRESHOLD_DEFAULT[4][3]; // mA
-extern const uint32_t POWER_THRESHOLD_DEFAULT[4][3];   // mW
+extern const uint32_t VOLTAGE_THRESHOLD[4];    // mV
+extern const uint32_t CURRENT_THRESHOLD[4][3]; // mA
+extern const uint32_t POWER_THRESHOLD[4][3];   // mW
 
 extern bool zero_detect_result[4];  // Kết quả zero detect cho 4 kênh
 

@@ -51,7 +51,11 @@ void RelayService::setRelayIndex(uint8_t idRelay, uint8_t setRelay) {
 
 void RelayService::setRelayState(uint8_t idRelay, bool state) {
     if (idRelay >= NUM_RELAYS) return;
-    setRelayIndex(idRelay, state ? 1 : 0);
+    if(state){
+        setRelayIndex(idRelay, 1);
+    }else{
+        setRelayIndex(idRelay, 0);
+    }
 }
 
 void RelayService::turnOn(uint8_t idRelay) {
