@@ -6,6 +6,7 @@
 #include "services/zero_detect/zero_detect.h"
 #include "services/eeprom_at24c02/at24c02.h"
 #include "services/write_memory/write_memory.h"
+#include "services/control_power/control_power.h"
 #include "config.h"
 #include <IWatchdog.h>
 
@@ -33,7 +34,7 @@ void delayWithBlink(uint32_t ms) {
                 ledLastBlinkTime = currentTime;
             }
         }
-        delay(10);  // Delay nhỏ để không chiếm CPU
+        delay(1);  // Delay nhỏ để không chiếm CPU
     }
 }
 
@@ -102,28 +103,40 @@ void setup() {
     UART_DEBUG.println(SystemCoreClock);
     */
     pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);
-    relayService.init();
-    zero_detect_init_pin();
-    delay(1000);
-    process_init();
-    //first_write_memory_all_channels();
-    ledBlinkEnable = true;
-    start_process();
-    time_end_process = millis();
-    ledBlinkEnable = false;
-    digitalWrite(LED_PIN, LOW);
-    IWatchdog.begin(WATCHDOG_TIMEOUT_MS);
+    digitalWrite(LED_PIN, HIGH);
+    control_power_init();
+
+    //IWatchdog.begin(WATCHDOG_TIMEOUT_MS);
 }
 
+uint32_t count = 0;
 void loop() {
+    if(is_return_power_control_signal()) {
+        delay(500);
+        digitalWrite(LED_PIN, LOW);
+        control_power_on();
+        relayService.init();
+        zero_detect_init_pin();
+        delay(1000);
+        process_init();
+        //first_write_memory_all_channels();
+        ledBlinkEnable = true;
+        start_process();
+        time_end_process = millis();
+        ledBlinkEnable = false;
+        digitalWrite(LED_PIN, HIGH);
+
+    } else {
+        control_power_shutdown();
+    }
     if(millis() - time_end_process >= 30000){
         relayService.turnOffAll();
+        delay(1000);
     }
     if(UART_DEBUG.available()){
         uint8_t data = UART_DEBUG.read();
         write_memory_process(data);
     }
-    IWatchdog.reload();
+
 }
 

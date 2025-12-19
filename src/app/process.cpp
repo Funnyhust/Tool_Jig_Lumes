@@ -20,7 +20,13 @@
 #else
 #define PROCESS_UART_DEBUG_PRINT(x)
 #define PROCESS_UART_DEBUG_PRINTLN(x)
-#endif  
+#endif
+
+static bool is_fail = false;
+
+bool is_fail_once(){
+    return is_fail;
+}
 
 // Khai báo hàm delay có blink LED từ main.cpp
 
@@ -70,7 +76,20 @@ uint32_t CURRENT_THRESHOLD_VALUE[4][3];
 uint32_t POWER_THRESHOLD_VALUE[4][3];
 
 
+static void reset_calib_value(){
+    for(int i = 0; i < 4; i++){
+        voltage_calib_count[i] = 0;
+        voltage_sum_uv[i] = 0;
+        for(int j = 0; j < 3; j++){
+            current_sum_ua[i][j] = 0;
+            current_calib_count[i][j] = 0;
+            power_sum_uw[i][j] = 0;
+            power_calib_count[i][j] = 0;
 
+        }
+
+    }
+}
 
 
 static void process_calibrate(){
@@ -193,42 +212,55 @@ void check_channel_pass(int channel){
     //kiểm tra theo giá trị calib
     if((kVoltage[channel] <LOW_THRESHOLD) || (kVoltage[channel] > HIGH_THRESHOLD)){
         channel_measurements[channel].voltage_ok = false;
+        is_fail = true;
     }
     else {
         channel_measurements[channel].voltage_ok = true;
     }
     if((kCurrent[channel][0] <LOW_THRESHOLD) || (kCurrent[channel][0] > HIGH_THRESHOLD)){
         channel_measurements[channel].current_1_ok = false;
+        is_fail = true;
+
     }
     else {
         channel_measurements[channel].current_1_ok = true;
     }
     if((kCurrent[channel][1] <LOW_THRESHOLD) || (kCurrent[channel][1] > HIGH_THRESHOLD)){
         channel_measurements[channel].current_2_ok = false;
+        is_fail = true;
+
     }
     else {
         channel_measurements[channel].current_2_ok = true;
     }
     if((kCurrent[channel][2] <LOW_THRESHOLD) || (kCurrent[channel][2] > HIGH_THRESHOLD)){
         channel_measurements[channel].current_3_ok = false;
+        is_fail = true;
+
     }
     else {
         channel_measurements[channel].current_3_ok = true;
     }
     if((kPower[channel][0] <LOW_THRESHOLD) || (kPower[channel][0] > HIGH_THRESHOLD)){
         channel_measurements[channel].power_1_ok = false;
+        is_fail = true;
+
     }
     else {
         channel_measurements[channel].power_1_ok = true;
     }
     if((kPower[channel][1] <LOW_THRESHOLD) || (kPower[channel][1] > HIGH_THRESHOLD)){
         channel_measurements[channel].power_2_ok = false;
+        is_fail = true;
+
     }
     else {
         channel_measurements[channel].power_2_ok = true;
     }
     if((kPower[channel][2] <LOW_THRESHOLD) || (kPower[channel][2] > HIGH_THRESHOLD)){
         channel_measurements[channel].power_3_ok = false;
+        is_fail = true;
+
     }
     else {
         channel_measurements[channel].power_3_ok = true;
@@ -455,6 +487,8 @@ void start_process(void)
 {
   // turn on all relay
    uint32_t start_time_ms = millis();
+
+   reset_calib_value();
    // turn on all relay
  
    relayService.turnOnAll();
@@ -521,6 +555,7 @@ void start_process(void)
            relayService.setRelayState(i*3, false);
            relayService.setRelayState(i*3+1, false);
            relayService.setRelayState(i*3+2, false);
+           is_fail=true;
        } else {
         relayService.setRelayState(i*3, (channel_measurements[i].current_1_ok&channel_measurements[i].power_1_ok));
         relayService.setRelayState(i*3+1, (channel_measurements[i].current_2_ok&channel_measurements[i].power_2_ok));
@@ -553,5 +588,8 @@ void start_process(void)
     UART_DEBUG.println("Process done");
     UART_DEBUG.print("Time process: ");
     UART_DEBUG.println(millis() - start_time_ms);
+
+    //TEST=================
+
 }
 

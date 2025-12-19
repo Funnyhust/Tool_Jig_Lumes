@@ -130,8 +130,7 @@ void zero_detect_process(void)
 
     uint32_t time_start = micros();
     while(micros() - time_start < 1000000) {
-        delayMicroseconds(5);
-      
+        delayWithBlink(1);    
     }
     //Stop interrupt
     detachInterrupt(digitalPinToInterrupt(ZERO_DETECT_PORT_1));
