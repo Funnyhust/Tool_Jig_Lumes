@@ -102,6 +102,7 @@ void setup() {
     //UART_DEBUG.println(F_CPU);
     UART_DEBUG.println(SystemCoreClock);
     */
+    uart_init();
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
     control_power_init();
@@ -137,6 +138,7 @@ void loop() {
         uint8_t data = UART_DEBUG.read();
         write_memory_process(data);
     }
-
+    // UART_DEBUG.println("LOOP");
+    // delay(1000);
 }
 

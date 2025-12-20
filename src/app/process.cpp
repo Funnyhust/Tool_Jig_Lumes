@@ -284,24 +284,8 @@ void check_channel_pass(int channel){
     PROCESS_UART_DEBUG_PRINTLN(kPower[channel][2]);
 }
 
-
-// Khởi tạo bl0906
-void process_init(void)
-{
-    // Đọc các giá trị threshold từ EEPROM (Flash của STM32) khi khởi động
-    // Nếu có dữ liệu trong EEPROM thì sẽ ghi đè lên giá trị mặc định
-    if (read_all_eeprom_channels(VOLTAGE_THRESHOLD_VALUE,
-                                        CURRENT_THRESHOLD_VALUE,
-                                        POWER_THRESHOLD_VALUE)) {
-        PROCESS_UART_DEBUG_PRINTLN("Loaded thresholds from Flash memory");
-    } else {
-        PROCESS_UART_DEBUG_PRINTLN("Using default thresholds (no data in Flash)");
-    }
-    
-    // STM32F103VE có 5 UART: Serial1, Serial2, Serial3, Serial4, Serial5
-    // Serial1 → Debug
-    // Serial2, Serial3, Serial4, Serial5 → 4 kênh BL0906 (channel 0, 1, 2, 3)
-    
+void uart_init(){
+   
     // Serial1 cho debug
     if (true) {  // Serial1 luôn có trên STM32F103VE
         UART_DEBUG.begin(19200);
@@ -331,6 +315,24 @@ void process_init(void)
     UART_BL0906_4.begin(19200);
     uartBl0906[3] = new UartService(&UART_BL0906_4, "BL0906_4");
     #endif
+}
+// Khởi tạo bl0906
+void process_init(void)
+{
+    // Đọc các giá trị threshold từ EEPROM (Flash của STM32) khi khởi động
+    // Nếu có dữ liệu trong EEPROM thì sẽ ghi đè lên giá trị mặc định
+    if (read_all_eeprom_channels(VOLTAGE_THRESHOLD_VALUE,
+                                        CURRENT_THRESHOLD_VALUE,
+                                        POWER_THRESHOLD_VALUE)) {
+        PROCESS_UART_DEBUG_PRINTLN("Loaded thresholds from Flash memory");
+    } else {
+        PROCESS_UART_DEBUG_PRINTLN("Using default thresholds (no data in Flash)");
+    }
+    
+    // STM32F103VE có 5 UART: Serial1, Serial2, Serial3, Serial4, Serial5
+    // Serial1 → Debug
+    // Serial2, Serial3, Serial4, Serial5 → 4 kênh BL0906 (channel 0, 1, 2, 3)
+ 
     
     // Khởi tạo bl0906 cho các UART đã khởi tạo
     for (int i = 0; i < 4; i++) {

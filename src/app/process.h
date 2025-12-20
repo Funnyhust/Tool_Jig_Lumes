@@ -21,6 +21,7 @@ extern const uint32_t POWER_THRESHOLD[4][3];   // mW
 extern bool zero_detect_result[4];  // Kết quả zero detect cho 4 kênh
 
 // Khai báo hàm khởi tạo
+void uart_init(void);
 void process_init(void);
 void start_process(void);
 bool is_fail_once();
