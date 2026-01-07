@@ -1,33 +1,21 @@
 #include "relay_service.h"
 
-// Map relay với GPIO port và pin (theo Middle/relay.c)
+// Map relay với GPIO port và pin theo sơ đồ phần cứng
 // Port: 0=PA, 1=PB, 2=PC, 3=PD, 4=PE
 // Pin: 0-15 (số pin trong port)
-// {GPIOE, GPIO_PIN_1} -> port=4, pin=1
-// {GPIOE, GPIO_PIN_0} -> port=4, pin=0
-// {GPIOB, GPIO_PIN_9} -> port=1, pin=9
-// {GPIOD, GPIO_PIN_3} -> port=3, pin=3
-// {GPIOD, GPIO_PIN_4} -> port=3, pin=4
-// {GPIOD, GPIO_PIN_5} -> port=3, pin=5
-// {GPIOD, GPIO_PIN_6} -> port=3, pin=6
-// {GPIOD, GPIO_PIN_7} -> port=3, pin=7
-// {GPIOB, GPIO_PIN_3} -> port=1, pin=3
-// {GPIOB, GPIO_PIN_4} -> port=1, pin=4
-// {GPIOB, GPIO_PIN_5} -> port=1, pin=5
-// {GPIOB, GPIO_PIN_6} -> port=1, pin=6
 const RelayMap_t RelayService::_relayMap[NUM_RELAYS] = {
-    {4, 1},  // RELAY_1A - PE1
-    {4, 0},  // RELAY_1B - PE0
-    {1, 9},  // RELAY_1C - PB9
-    {3, 3},  // RELAY_2A - PD3
-    {3, 4},  // RELAY_2B - PD4
-    {3, 5},  // RELAY_2C - PD5
-    {3, 6},  // RELAY_3A - PD6
-    {3, 7},  // RELAY_3B - PD7
-    {1, 3},  // RELAY_3C - PB3
-    {1, 4},  // RELAY_4A - PB4
-    {1, 5},  // RELAY_4B - PB5
-    {1, 6}   // RELAY_4C - PB6
+    {3, 8},   // RELAY_1A - PD8
+    {3, 9},   // RELAY_1B - PD9
+    {1, 15},  // RELAY_1C - PB15
+    {1, 1},   // RELAY_2A - PB1
+    {1, 0},   // RELAY_2B - PB0
+    {2, 5},   // RELAY_2C - PC5
+    {4, 15},  // RELAY_3A - PE15
+    {4, 14},  // RELAY_3B - PE14
+    {4, 13},  // RELAY_3C - PE13
+    {4, 1},   // RELAY_4A - PE1
+    {4, 0},   // RELAY_4B - PE0
+    {1, 9}    // RELAY_4C - PB9
 };
 
 void RelayService::init() {

@@ -1,7 +1,7 @@
 #include "control_power.h"
 #include <Arduino.h>
 #include "HardwareTimer.h"
-#include "config.h"
+#include "../../config.h"
 
 /* ================= CONFIG ================= */
 
@@ -23,13 +23,25 @@ uint32_t log_time_end = 0;
 
 void control_power_on(void)
 {
-    digitalWrite(POWER_CONTROL_PIN, HIGH);
+    digitalWrite(POWER_CONTROL_PIN_1, HIGH);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_2, HIGH);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_3, HIGH);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_4, HIGH);
 }
 
 /* TẮT nguồn */
 void control_power_shutdown(void)
 {
-    digitalWrite(POWER_CONTROL_PIN, LOW);
+    digitalWrite(POWER_CONTROL_PIN_1, LOW);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_2, LOW);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_3, LOW);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_4, LOW);
 }
 
 
@@ -70,9 +82,16 @@ void control_power_init(void)
     // Công tắc NC
     pinMode(POWER_CONTROL_SIGNAL_PIN, INPUT_PULLUP);
 
-    // Điều khiển nguồn (LOW = OFF, HIGH = ON)
-    pinMode(POWER_CONTROL_PIN, OUTPUT);
-    digitalWrite(POWER_CONTROL_PIN, LOW);
+    // Điều khiển nguồn 4 kênh (LOW = OFF, HIGH = ON)
+    pinMode(POWER_CONTROL_PIN_1, OUTPUT);
+    pinMode(POWER_CONTROL_PIN_2, OUTPUT);
+    pinMode(POWER_CONTROL_PIN_3, OUTPUT);
+    pinMode(POWER_CONTROL_PIN_4, OUTPUT);
+    
+    digitalWrite(POWER_CONTROL_PIN_1, LOW);
+    digitalWrite(POWER_CONTROL_PIN_2, LOW);
+    digitalWrite(POWER_CONTROL_PIN_3, LOW);
+    digitalWrite(POWER_CONTROL_PIN_4, LOW);
 
     // GPIO interrupt: nhấc công tắc
     attachInterrupt(

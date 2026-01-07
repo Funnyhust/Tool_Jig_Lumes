@@ -2,6 +2,7 @@
 #define RELAY_SERVICE_H
 
 #include <Arduino.h>
+#include "config.h"
 
 enum {
     RELAY_1A,
