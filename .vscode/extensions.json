@@ -3,7 +3,8 @@
     // for the documentation about the extensions.json format
     "recommendations": [
         "eclipse-cdt.serial-monitor",
-        "platformio.platformio-ide"
+        "platformio.platformio-ide",
+        "wombat.fancymon"
     ],
     "unwantedRecommendations": [
         "ms-vscode.cpptools-extension-pack"
