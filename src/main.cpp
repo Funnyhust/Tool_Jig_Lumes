@@ -96,8 +96,9 @@ void setup() {
 }
 
 void loop() {
-  if (is_first_run) {
-    if (!is_return_power_control_signal()) {
+    if (is_return_power_control_signal()) {
+      if (is_first_run) {
+      
       UART_DEBUG.println("Power control signal detected");
       is_first_run = false;
       process_init();
@@ -105,10 +106,13 @@ void loop() {
       start_process();
       ledBlinkEnable = false;
       digitalWrite(LED_PIN, LOW);
-    } else {
-      control_power_shutdown();
     }
   }
+  //Nếu thời gian quá 5s thì reset is first run
+  if (is_first_run && millis() - time_end_process >= 5000) {
+    is_first_run = true;
+  }
+
   if (millis() - time_end_process >= 30000) {
     relayService.turnOffAll();
   }
