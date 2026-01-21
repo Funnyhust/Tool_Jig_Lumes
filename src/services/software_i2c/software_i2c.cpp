@@ -1,3 +1,28 @@
+/*******************************************************************************
+ *				 _ _                                             _ _
+				|   |                                           (_ _)
+				|   |        _ _     _ _   _ _ _ _ _ _ _ _ _ _   _ _
+				|   |       |   |   |   | |    _ _     _ _    | |   |
+				|   |       |   |   |   | |   |   |   |   |   | |   |
+				|   |       |   |   |   | |   |   |   |   |   | |   |
+				|   |_ _ _  |   |_ _|   | |   |   |   |   |   | |   |
+				|_ _ _ _ _| |_ _ _ _ _ _| |_ _|   |_ _|   |_ _| |_ _|
+								(C)2022 Lumi
+ * Copyright (c) 2022
+ * Lumi, JSC.
+ * All Rights Reserved
+ *
+ * File name: software_i2c.cpp
+ *
+ * Description:
+ *
+ *
+ * Last Changed By:  $Author: duongnv $
+ * Revision:         $Revision: 1.0.0 $
+ * Last Changed:     $Date: January 21, 2026 $
+ *
+ * Code sample:
+ ******************************************************************************/
 // Note các chân sử dụng cho phần mềm I2C
 /*
 PE13 TIM1_CH3

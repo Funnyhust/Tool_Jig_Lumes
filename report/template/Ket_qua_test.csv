@@ -1,0 +1,16 @@
+﻿,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,
+,,,Chức năng module,Nội dung thực hiện,Mục tiêu,Kết quả,Phương pháp kiểm chứng,Giải thích,,,,,,,,,,
+,Firmware,1,"Sơ đồ đấu nối GPIO, vấn đề hardware",Các chân UART có hoạt động không,Giao tiếp được giữa STM32 và BL0906 bằng UART,Pass,Kiểm tra log UART,"Giao tiếp UART thành công, nhận đủ giá trị Calib từ 4 channel",,,,,,,,,,
+,Firmware,2,,Các chân kết nối relay chạy được không,Điều khiển được relay,Có,,,,,,,,,,,,
+,Firmware,3,,Các chân GPIO khác,Ngoài UART có cần kết nối thêm GPIO nào giữa STM32 với BL0906 không?,Dùng thêm 8 chân khác làm I2C mềm,,,,,,,,,,,,
+,Firmware,,,Bắt điểm 0 có đúng không?,,Pass,Kiểm tra log ZCD,"Zero detect is pass cho cả 4 channel",,,,,,,,,,,
+,Firmware,6,Đo giá trị chuẩn của tải và ghi vào flash của STM32,Đo  giá trị chuẩn của tải,,"Đã đo giá trị 12 tải giả, ghi giá trị vào flash STM32",,,,,,,,,,,,
+,Firmware,7,,Ghi giá trị vào flash của STM32 thành công không?,"Ghi giá trị tải vào flash bằng cách gửi bản tin qua UART, confirm thành công bằng cách khởi động lại thiết bị để đọc log giá trị mới",Hoàn thành,,,,,,,,,,,,
+,Firmware,8,Calib thiết bị,Phương pháp calib đã chính xác chưa,"Đo U, I, P thực tế và tính toán hệ số Calib",Đã confirm,,,,,,,,,,,,
+,Firmware,9,,Giá trị calib lưu vào EEPROM có thành công hay không,Lưu hệ số Calib vào EEPROM của thiết bị,Pass,Kiểm tra log EEPROM,"Write eeprom is:Success cho cả 4 channel",,,,,,,,,,,
+,Firmware,5,Chức năng test nguồn của Tool,Parse dữ liệu đọc được từ BL0906,Parse đúng dữ liệu đọc được từ UART ra thành đúng số liệu đo được dựa theo lý thuyết,Pass,Kiểm tra log UART,"Parse thành công giá trị kV, kI, kP",,,,,,,,,,,
+,Firmware,6,,Kết quả trả về có chính xác không?,Confirm được là kết quả phép đo của Jig Test là chính xác trong khoảng bao nhiêu %,,,,,,,,,,,,,
+,Firmware,7,,Kết quả hiển thị ra qua relay,"Hiển thị ra đúng với kết quả đo:
+- Pass thì bật relay thế nào?
+- Fail thì bật relay thế nào?",,,,,,,,,,,,,

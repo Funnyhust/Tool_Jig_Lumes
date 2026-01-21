@@ -1,3 +1,28 @@
+/*******************************************************************************
+ *				 _ _                                             _ _
+				|   |                                           (_ _)
+				|   |        _ _     _ _   _ _ _ _ _ _ _ _ _ _   _ _
+				|   |       |   |   |   | |    _ _     _ _    | |   |
+				|   |       |   |   |   | |   |   |   |   |   | |   |
+				|   |       |   |   |   | |   |   |   |   |   | |   |
+				|   |_ _ _  |   |_ _|   | |   |   |   |   |   | |   |
+				|_ _ _ _ _| |_ _ _ _ _ _| |_ _|   |_ _|   |_ _| |_ _|
+								(C)2022 Lumi
+ * Copyright (c) 2022
+ * Lumi, JSC.
+ * All Rights Reserved
+ *
+ * File name: process.cpp
+ *
+ * Description:
+ *
+ *
+ * Last Changed By:  $Author: duongnv $
+ * Revision:         $Revision: 1.0.0 $
+ * Last Changed:     $Date: January 21, 2026 $
+ *
+ * Code sample:
+ ******************************************************************************/
 #include "process.h"
 #include "../config.h"
 #include "../services/bl0906/bl0906.h"
@@ -135,7 +160,7 @@ void write_eeprom_value(void) {
     for (int j = 0; j < 3; j++) { // retry max 3 times
       PROCESS_UART_DEBUG_PRINT("Retry: ");
       PROCESS_UART_DEBUG_PRINTLN(j + 1);
-      
+
       // Ghi page địa chỉ 0x00 - 0x07
       for (int k = 0; k < 8; k++) {
 #if EEPROM_TEST_ENABLE
@@ -145,9 +170,9 @@ void write_eeprom_value(void) {
 #endif
       }
       if (!at24c02_write_block(0x00, page_to_write, 8)) {
-          PROCESS_UART_DEBUG_PRINT("CH");
-          PROCESS_UART_DEBUG_PRINT(ch + 1);
-          PROCESS_UART_DEBUG_PRINTLN(": I2C Write NACK (No Response) at 0x00");
+        PROCESS_UART_DEBUG_PRINT("CH");
+        PROCESS_UART_DEBUG_PRINT(ch + 1);
+        PROCESS_UART_DEBUG_PRINTLN(": I2C Write NACK (No Response) at 0x00");
       }
       delayWithBlink(50);
       // Ghi page địa chỉ 0x08 - 0x0F
@@ -159,22 +184,23 @@ void write_eeprom_value(void) {
 #endif
       }
       if (!at24c02_write_block(0x08, page_to_write, 8)) {
-          PROCESS_UART_DEBUG_PRINT("CH");
-          PROCESS_UART_DEBUG_PRINT(ch + 1);
-          PROCESS_UART_DEBUG_PRINTLN(": I2C Write NACK (No Response) at 0x08");
+        PROCESS_UART_DEBUG_PRINT("CH");
+        PROCESS_UART_DEBUG_PRINT(ch + 1);
+        PROCESS_UART_DEBUG_PRINTLN(": I2C Write NACK (No Response) at 0x08");
       }
       delayWithBlink(50);
       // Đọc page địa chỉ 0x00 - 0x0D
       if (!at24c02_read_block(0x00, block_to_read, 14)) {
-          PROCESS_UART_DEBUG_PRINT("CH");
-          PROCESS_UART_DEBUG_PRINT(ch + 1);
-          PROCESS_UART_DEBUG_PRINTLN(": I2C Read NACK (No Response)");
+        PROCESS_UART_DEBUG_PRINT("CH");
+        PROCESS_UART_DEBUG_PRINT(ch + 1);
+        PROCESS_UART_DEBUG_PRINTLN(": I2C Read NACK (No Response)");
       }
-      
+
       // Kiểm tra giá trị đọc được có giống với giá trị ghi vào không
       bool ok = true;
       for (int k = 0; k < 14; k++) {
-        // Note: With EEPROM_TEST_ENABLE, this comparison might fail if logic is not consistent
+        // Note: With EEPROM_TEST_ENABLE, this comparison might fail if logic is
+        // not consistent
         if (block_to_read[k] != eeprom_value[ch][k]) {
           ok = false;
           PROCESS_UART_DEBUG_PRINT("CH");
@@ -479,8 +505,7 @@ void start_process(void) {
     check_channel_pass(i);
   }
 
-
-    for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 4; i++) {
     // Check zero detect again for relay control logic
     bool zero_ok = zero_detect_get_result(i);
     if ((!zero_ok) || (!write_eeprom_success[i]) ||

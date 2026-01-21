@@ -1,3 +1,28 @@
+/*******************************************************************************
+ *				 _ _                                             _ _
+				|   |                                           (_ _)
+				|   |        _ _     _ _   _ _ _ _ _ _ _ _ _ _   _ _
+				|   |       |   |   |   | |    _ _     _ _    | |   |
+				|   |       |   |   |   | |   |   |   |   |   | |   |
+				|   |       |   |   |   | |   |   |   |   |   | |   |
+				|   |_ _ _  |   |_ _|   | |   |   |   |   |   | |   |
+				|_ _ _ _ _| |_ _ _ _ _ _| |_ _|   |_ _|   |_ _| |_ _|
+								(C)2022 Lumi
+ * Copyright (c) 2022
+ * Lumi, JSC.
+ * All Rights Reserved
+ *
+ * File name: config.h
+ *
+ * Description:
+ *
+ *
+ * Last Changed By:  $Author: duongnv $
+ * Revision:         $Revision: 1.0.0 $
+ * Last Changed:     $Date: January 21, 2026 $
+ *
+ * Code sample:
+ ******************************************************************************/
 #ifndef CONFIG_H
 #define CONFIG_H
 
