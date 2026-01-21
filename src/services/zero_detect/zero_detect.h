@@ -4,10 +4,10 @@
 #include <Arduino.h>
 
 // Định nghĩa pin cho zero detect (giống cách dùng PC13 trong main.cpp)
-#define ZERO_DETECT_PORT_1 PC0
-#define ZERO_DETECT_PORT_2 PC1
-#define ZERO_DETECT_PORT_3 PC2
-#define ZERO_DETECT_PORT_4 PC3
+// #define ZERO_DETECT_PORT_1 PC0
+// #define ZERO_DETECT_PORT_2 PC1
+// #define ZERO_DETECT_PORT_3 PC2
+// #define ZERO_DETECT_PORT_4 PC3
 
 void zero_detect_init_pin(void);
 void zero_detect_init(void);

@@ -18,6 +18,7 @@
 #define UART_BL0906_4 Serial4
 
 #define POWER_CONTROL_SIGNAL_PIN PC6
+
 #define POWER_CONTROL_PIN_1 PD15
 #define POWER_CONTROL_PIN_2 PD14
 #define POWER_CONTROL_PIN_3 PD13
@@ -52,5 +53,5 @@
 
 #define PROCESS_DEBUG_ENABLE true
 #define BL0906_DBG_EN false
-#define EEPROM_TEST_ENABLE true
+#define EEPROM_TEST_ENABLE false
 #endif

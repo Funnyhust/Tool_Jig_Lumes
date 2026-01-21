@@ -7,17 +7,24 @@ void at24c02_init(uint8_t bus_num) {
     i2c_init();
 }
 
-void at24c02_write(uint8_t address, uint8_t data) {
+bool at24c02_write(uint8_t address, uint8_t data) {
     i2c_start();                                    // START condition
-    i2c_write_byte(AT24C02_ADDRESS << 1);          // Device address + R/W=0 (write)
+    if (!i2c_write_byte(AT24C02_ADDRESS << 1)) {    // Device address + R/W=0 (write)
+        i2c_stop();
+        return false;
+    }
     i2c_write_byte(address);                       // Word address
     i2c_write_byte(data);                          // Data byte
     i2c_stop();                                     // STOP condition
+    return true;
 }
 
-void at24c02_write_block(uint8_t address, uint8_t* data, uint8_t length) {
+bool at24c02_write_block(uint8_t address, uint8_t* data, uint8_t length) {
     i2c_start();                                    // START condition
-    i2c_write_byte(AT24C02_ADDRESS << 1);          // Device address + R/W=0 (write)
+    if (!i2c_write_byte(AT24C02_ADDRESS << 1)) {    // Device address + R/W=0 (write)
+        i2c_stop();
+        return false;
+    }
     i2c_write_byte(address);                       // Word address (n)
     
     // Ghi các byte dữ liệu liên tiếp (tối đa 8 byte cho 1 page)
@@ -26,6 +33,7 @@ void at24c02_write_block(uint8_t address, uint8_t* data, uint8_t length) {
     }
     
     i2c_stop();                                     // STOP condition
+    return true;
 }
 
 uint8_t at24c02_read(uint8_t address) {
@@ -33,12 +41,18 @@ uint8_t at24c02_read(uint8_t address) {
     
     // Gửi word address (write mode)
     i2c_start();
-    i2c_write_byte(AT24C02_ADDRESS << 1);  // Device address + R/W=0 (write)
+    if (!i2c_write_byte(AT24C02_ADDRESS << 1)) {  // Device address + R/W=0 (write)
+        i2c_stop();
+        return 0xFF;
+    }
     i2c_write_byte(address);                // Word address
     
     // Repeated START và chuyển sang read mode
     i2c_restart();
-    i2c_write_byte((AT24C02_ADDRESS << 1) | 0x01);  // Device address + R/W=1 (read)
+    if (!i2c_write_byte((AT24C02_ADDRESS << 1) | 0x01)) {  // Device address + R/W=1 (read)
+        i2c_stop();
+        return 0xFF;
+    }
     
     // Đọc 1 byte và gửi NACK
     data = i2c_read_byte(false);  // NACK vì chỉ đọc 1 byte
@@ -47,15 +61,21 @@ uint8_t at24c02_read(uint8_t address) {
     return data;
 }
 
-void at24c02_read_block(uint8_t address, uint8_t* data, uint8_t length) {
+bool at24c02_read_block(uint8_t address, uint8_t* data, uint8_t length) {
     // Gửi word address (write mode)
     i2c_start();
-    i2c_write_byte(AT24C02_ADDRESS << 1);  // Device address + R/W=0 (write)
+    if (!i2c_write_byte(AT24C02_ADDRESS << 1)) {  // Device address + R/W=0 (write)
+        i2c_stop();
+        return false;
+    }
     i2c_write_byte(address);                // Word address
     
     // Repeated START và chuyển sang read mode
     i2c_restart();
-    i2c_write_byte((AT24C02_ADDRESS << 1) | 0x01);  // Device address + R/W=1 (read)
+    if (!i2c_write_byte((AT24C02_ADDRESS << 1) | 0x01)) {  // Device address + R/W=1 (read)
+        i2c_stop();
+        return false;
+    }
     
     // Đọc các byte liên tiếp
     for (uint8_t i = 0; i < length; i++) {
@@ -69,6 +89,7 @@ void at24c02_read_block(uint8_t address, uint8_t* data, uint8_t length) {
     }
     
     i2c_stop();
+    return true;
 }
 
 void at24c02_test(uint8_t bus_num) {

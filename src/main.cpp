@@ -100,6 +100,8 @@ void loop() {
       if (is_first_run) {
       
       UART_DEBUG.println("Power control signal detected");
+      delay(2000);
+      control_power_on();
       is_first_run = false;
       process_init();
       ledBlinkEnable = true;

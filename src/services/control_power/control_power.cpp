@@ -5,7 +5,7 @@
 
 /* ================= CONFIG ================= */
 
-#define CONFIRM_TIME_US   50000UL   // 50 ms
+#define CONFIRM_TIME_US   100000UL   // 50 ms
 
 /* ================= INTERNAL ================= */
 
@@ -23,13 +23,13 @@ uint32_t log_time_end = 0;
 
 void control_power_on(void)
 {
-    digitalWrite(POWER_CONTROL_PIN_1, HIGH);
-    delay(50);
-    digitalWrite(POWER_CONTROL_PIN_2, HIGH);
-    delay(50);
     digitalWrite(POWER_CONTROL_PIN_3, HIGH);
     delay(50);
     digitalWrite(POWER_CONTROL_PIN_4, HIGH);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_1, HIGH);
+    delay(50);
+    digitalWrite(POWER_CONTROL_PIN_2, HIGH);
 }
 
 /* TẮT nguồn */
@@ -64,14 +64,13 @@ void power_control_timer_isr(void)
 
     if (digitalRead(POWER_CONTROL_SIGNAL_PIN) == HIGH) {
         // FAIL SAFE: TẮT NGUỒN
+        UART_DEBUG.println(" SHUTDOWN POWER");
         control_power_shutdown();
-
     }
     log_time_end = millis();
     UART_DEBUG.print("Power control: Timer triggered - shutting down power. Duration: ");
     UART_DEBUG.print(log_time_end - log_time_start);
     UART_DEBUG.println(" ms");
-
     timerArmed = false;
 }
 
@@ -114,12 +113,12 @@ void control_power_init(void)
 /* Công tắc đang được giữ? */
 bool is_return_power_control_signal(void)
 {
-    UART_DEBUG.print("Power control signal state: ");
+    //UART_DEBUG.print("Power control signal state: ");
     if (digitalRead(POWER_CONTROL_SIGNAL_PIN) == LOW) {
-        UART_DEBUG.println("LOW (ON)");
+        //UART_DEBUG.println("LOW (ON)");
         return true;
     } else {
-        UART_DEBUG.println("HIGH (OFF)");
+        //UART_DEBUG.println("HIGH (OFF)");
         return false;
     }
     return (digitalRead(POWER_CONTROL_SIGNAL_PIN) == LOW);

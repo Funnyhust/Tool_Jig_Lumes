@@ -133,6 +133,9 @@ void write_eeprom_value(void) {
     at24c02_init(ch + 1);
     delayWithBlink(10);
     for (int j = 0; j < 3; j++) { // retry max 3 times
+      PROCESS_UART_DEBUG_PRINT("Retry: ");
+      PROCESS_UART_DEBUG_PRINTLN(j + 1);
+      
       // Ghi page địa chỉ 0x00 - 0x07
       for (int k = 0; k < 8; k++) {
 #if EEPROM_TEST_ENABLE
@@ -141,7 +144,11 @@ void write_eeprom_value(void) {
         page_to_write[k] = eeprom_value[ch][k];
 #endif
       }
-      at24c02_write_block(0x00, page_to_write, 8);
+      if (!at24c02_write_block(0x00, page_to_write, 8)) {
+          PROCESS_UART_DEBUG_PRINT("CH");
+          PROCESS_UART_DEBUG_PRINT(ch + 1);
+          PROCESS_UART_DEBUG_PRINTLN(": I2C Write NACK (No Response) at 0x00");
+      }
       delayWithBlink(50);
       // Ghi page địa chỉ 0x08 - 0x0F
       for (int k = 0; k < 8; k++) {
@@ -151,15 +158,33 @@ void write_eeprom_value(void) {
         page_to_write[k] = eeprom_value[ch][k + 8];
 #endif
       }
-      at24c02_write_block(0x08, page_to_write, 8);
+      if (!at24c02_write_block(0x08, page_to_write, 8)) {
+          PROCESS_UART_DEBUG_PRINT("CH");
+          PROCESS_UART_DEBUG_PRINT(ch + 1);
+          PROCESS_UART_DEBUG_PRINTLN(": I2C Write NACK (No Response) at 0x08");
+      }
       delayWithBlink(50);
       // Đọc page địa chỉ 0x00 - 0x0D
-      at24c02_read_block(0x00, block_to_read, 14);
+      if (!at24c02_read_block(0x00, block_to_read, 14)) {
+          PROCESS_UART_DEBUG_PRINT("CH");
+          PROCESS_UART_DEBUG_PRINT(ch + 1);
+          PROCESS_UART_DEBUG_PRINTLN(": I2C Read NACK (No Response)");
+      }
+      
       // Kiểm tra giá trị đọc được có giống với giá trị ghi vào không
       bool ok = true;
       for (int k = 0; k < 14; k++) {
+        // Note: With EEPROM_TEST_ENABLE, this comparison might fail if logic is not consistent
         if (block_to_read[k] != eeprom_value[ch][k]) {
           ok = false;
+          PROCESS_UART_DEBUG_PRINT("CH");
+          PROCESS_UART_DEBUG_PRINT(ch + 1);
+          PROCESS_UART_DEBUG_PRINT(" Data Mismatch Index: ");
+          PROCESS_UART_DEBUG_PRINT(k);
+          PROCESS_UART_DEBUG_PRINT(" Exp: ");
+          PROCESS_UART_DEBUG_PRINT((int)eeprom_value[ch][k]);
+          PROCESS_UART_DEBUG_PRINT(" Act: ");
+          PROCESS_UART_DEBUG_PRINTLN((int)block_to_read[k]);
           break;
         }
       }
@@ -454,21 +479,17 @@ void start_process(void) {
     check_channel_pass(i);
   }
 
-  // Kiểm tra kết quả và điều khiển relay
-  for (int i = 0; i < 4; i++) {
-    // Kiểm tra zero detect: nếu không pass thì tắt tất cả relay của kênh đó
+
+    for (int i = 0; i < 4; i++) {
+    // Check zero detect again for relay control logic
     bool zero_ok = zero_detect_get_result(i);
     if ((!zero_ok) || (!write_eeprom_success[i]) ||
         (!channel_measurements[i].voltage_ok)) {
-      // Zero detect fail - tắt cả 3 relay của kênh này
-      PROCESS_UART_DEBUG_PRINT("Zero detect is fail for channel: ");
-      PROCESS_UART_DEBUG_PRINTLN(i + 1);
+      // Zero detect fail - turn off all 3 relays of this channel
       relayService.setRelayState(i * 3, false);
       relayService.setRelayState(i * 3 + 1, false);
       relayService.setRelayState(i * 3 + 2, false);
     } else {
-      PROCESS_UART_DEBUG_PRINT("Zero detect is pass for channel: ");
-      PROCESS_UART_DEBUG_PRINTLN(i + 1);
       relayService.setRelayState(i * 3, (channel_measurements[i].current_1_ok &
                                          channel_measurements[i].power_1_ok));
       relayService.setRelayState(i * 3 + 1,
@@ -479,6 +500,19 @@ void start_process(void) {
                                   channel_measurements[i].power_3_ok));
     }
   }
+  // Kiểm tra kết quả và điều khiển relay
+  // Output log results
+  for (int i = 0; i < 4; i++) {
+    bool zero_ok = zero_detect_get_result(i);
+    if (!zero_ok) {
+      PROCESS_UART_DEBUG_PRINT("Zero detect is fail for channel: ");
+      PROCESS_UART_DEBUG_PRINTLN(i + 1);
+    } else {
+      PROCESS_UART_DEBUG_PRINT("Zero detect is pass for channel: ");
+      PROCESS_UART_DEBUG_PRINTLN(i + 1);
+    }
+  }
+
   // Write eeprom status
   for (int i = 0; i < 4; i++) {
     PROCESS_UART_DEBUG_PRINT("Write eeprom is:");
