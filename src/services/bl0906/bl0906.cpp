@@ -219,9 +219,10 @@ void bl0906_set_channel(uint8_t channel) {
     // Reset giá trị của kênh này trước khi đọc
     memset(&measurement_values[channel], 0, sizeof(measurement_value_t));
     measurement_values[channel].voltage_ok = false;
-    measurement_values[channel].current_1_ok = false;
-    measurement_values[channel].current_2_ok = false;
-    measurement_values[channel].current_3_ok = false;
+    for (int k = 0; k < 3; k++) {
+      measurement_values[channel].current_ok[k] = false;
+      measurement_values[channel].power_ok[k] = false;
+    }
   }
 }
 
@@ -1200,12 +1201,11 @@ void bl0906_reset_measurements(void) {
   memset(&measurement_values[current_channel], 0, sizeof(measurement_value_t));
   // Reset các flag OK về false
   measurement_values[current_channel].voltage_ok = false;
-  measurement_values[current_channel].current_1_ok = false;
-  measurement_values[current_channel].current_2_ok = false;
-  measurement_values[current_channel].current_3_ok = false;
-  measurement_values[current_channel].active_power[0] = 0;
-  measurement_values[current_channel].active_power[1] = 0;
-  measurement_values[current_channel].active_power[2] = 0;
+  for(int k=0; k<3; k++) {
+    measurement_values[current_channel].current_ok[k] = false;
+    measurement_values[current_channel].power_ok[k] = false;
+    measurement_values[current_channel].active_power[k] = 0;
+  }
 }
 
 /**

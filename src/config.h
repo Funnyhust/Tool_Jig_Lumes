@@ -38,8 +38,10 @@
 // UART5 (PC12/PD2)  → Debug
 #define UART_DEBUG Serial5
 #define UART_BL0906_1 Serial1
-#define UART_BL0906_2 Serial2
-#define UART_BL0906_3 Serial3
+// #define UART_BL0906_2 Serial2
+// #define UART_BL0906_3 Serial3
+#define UART_BL0906_2 Serial3
+#define UART_BL0906_3 Serial2
 #define UART_BL0906_4 Serial4
 
 #define POWER_CONTROL_SIGNAL_PIN PC6
@@ -51,27 +53,39 @@
 
 #define SCL_PIN_1 PB12
 #define SDA_PIN_1 PB13
-#define SCL_PIN_2 PA6
-#define SDA_PIN_2 PA7
-#define SCL_PIN_3 PE11
-#define SDA_PIN_3 PE10
+// #define SCL_PIN_2 PA6
+// #define SDA_PIN_2 PA7
+// #define SCL_PIN_3 PE11
+// #define SDA_PIN_3 PE10
+#define SCL_PIN_2 PE11
+#define SDA_PIN_2 PE10
+#define SCL_PIN_3 PA6
+#define SDA_PIN_3 PA7
 #define SCL_PIN_4 PB6
 #define SDA_PIN_4 PB7
 
 #define ZERO_DETECT_PORT_1 PB14
-#define ZERO_DETECT_PORT_2 PC4
-#define ZERO_DETECT_PORT_3 PE12
+// #define ZERO_DETECT_PORT_2 PC4
+// #define ZERO_DETECT_PORT_3 PE12
+#define ZERO_DETECT_PORT_2 PE12
+#define ZERO_DETECT_PORT_3 PC4
 #define ZERO_DETECT_PORT_4 PB8
 
 #define CON_RELAY1A PD9  // Relay 1A
 #define CON_RELAY1B PD8  // Relay 1B
 #define CON_RELAY1C PB15 // Relay 1C
-#define CON_RELAY2A PB1  // Relay 2A
-#define CON_RELAY2B PB0  // Relay 2B
-#define CON_RELAY2C PC5  // Relay 2C
-#define CON_RELAY3A PE15 // Relay 3A
-#define CON_RELAY3B PE14 // Relay 3B
-#define CON_RELAY3C PE13 // Relay 3C
+// #define CON_RELAY2A PB1  // Relay 2A
+// #define CON_RELAY2B PB0  // Relay 2B
+// #define CON_RELAY2C PC5  // Relay 2C
+// #define CON_RELAY3A PE15 // Relay 3A
+// #define CON_RELAY3B PE14 // Relay 3B
+// #define CON_RELAY3C PE13 // Relay 3C
+#define CON_RELAY2A PE15  // Relay 2A
+#define CON_RELAY2B PE14  // Relay 2B
+#define CON_RELAY2C PE13  // Relay 2C
+#define CON_RELAY3A PB1   // Relay 3A
+#define CON_RELAY3B PB0   // Relay 3B
+#define CON_RELAY3C PC5   // Relay 3C
 #define CON_RELAY4A PE1  // Relay 4A
 #define CON_RELAY4B PE0  // Relay 4B
 #define CON_RELAY4C PB9  // Relay 4C

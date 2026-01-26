@@ -29,15 +29,15 @@
 // Port: 0=PA, 1=PB, 2=PC, 3=PD, 4=PE
 // Pin: 0-15 (số pin trong port)
 const RelayMap_t RelayService::_relayMap[NUM_RELAYS] = {
-    {3, 8},  // RELAY_1A - PD8
-    {3, 9},  // RELAY_1B - PD9
+    {3, 9},  // RELAY_1A - PD8
+    {3, 8},  // RELAY_1B - PD9
     {1, 15}, // RELAY_1C - PB15
-    {1, 1},  // RELAY_2A - PB1
-    {1, 0},  // RELAY_2B - PB0
-    {2, 5},  // RELAY_2C - PC5
-    {4, 15}, // RELAY_3A - PE15
-    {4, 14}, // RELAY_3B - PE14
-    {4, 13}, // RELAY_3C - PE13
+    {4, 15}, // RELAY_2A - PE15
+    {4, 14}, // RELAY_2B - PE14
+    {4, 13}, // RELAY_2C - PE13
+    {1, 1},  // RELAY_3A - PB1
+    {1, 0},  // RELAY_3B - PB0
+    {2, 5},  // RELAY_3C - PC5
     {4, 1},  // RELAY_4A - PE1
     {4, 0},  // RELAY_4B - PE0
     {1, 9}   // RELAY_4C - PB9
