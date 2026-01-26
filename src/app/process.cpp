@@ -132,6 +132,10 @@ static void process_calibrate() {
   }
 }
 
+// biến lưu kết quả check từng ralay
+static bool check_relay_result[4][3];
+
+
 void prepare_wrire_eeprom_value(void) {
   for (int i = 0; i < 4; i++) {
     eeprom_value[i][0] = kVoltage[i];
@@ -426,17 +430,23 @@ extern volatile bool ledBlinkEnable;
 //==================PROCESS==================//
 //===========================================//
 
-
-
 void start_process(void) {
-  // turn on all relay
+  // Init check_relay_result
+  for(int i=0; i<4; i++){
+      for(int j=0; j<3; j++){
+          check_relay_result[i][j] = true;
+      }
+  }
+
   uint32_t start_time_ms = millis();
-  // turn on all relay
+  
   //==================STATE 1: ZERO DETECT==================//
+  // turn on all relay
   relayService.turnOnAll();
   zero_detect_process();
   // Bật blink LED
   ledBlinkEnable = true;
+  
   //==================STATE 2: READ BL0906==================//
   // Set UART và channel cho từng kênh (có delay đặc biệt cho kênh 0)
   for (int i = 0; i < 4; i++) {
@@ -484,28 +494,110 @@ void start_process(void) {
     }
   }
   //==================STATE 3: WRITE CALIB VALUES TO EEPROM==================//
+  // Calculate K and write to EEPROM
   start_write_eeprom_value();
+  
+  // Check pass/fail based on K logic
   for (int i = 0; i < 4; i++) {
     check_channel_pass(i);
   }
 
+  // Initial decision based on Zero Detect / Calib result
   for (int i = 0; i < 4; i++) {
-    // Check zero detect again for relay control logic
     bool zero_ok = zero_detect_get_result(i);
-    if ((!zero_ok) || (!write_eeprom_success[i]) ||
-        (!channel_measurements[i].voltage_ok)) {
-      // Zero detect fail - turn off all 3 relays of this channel
+    // If any failure in pre-requisites
+    if (!zero_ok || !write_eeprom_success[i] || !channel_measurements[i].voltage_ok) {
+        // Fail - Turn OFF all relays for this channel
         for(int j=0; j<3; j++) {
             relayService.setRelayState(i * 3 + j, false);
         }
     } else {
+        // Pass - Turn relays ON/OFF based on current/power check
         for(int j=0; j<3; j++) {
             relayService.setRelayState(i * 3 + j, (channel_measurements[i].current_ok[j] & channel_measurements[i].power_ok[j]));
         }
     }
   }
-  //==================STATE 4: GET RESULT==================//
+  
+  // Turn off all before Parallel Test?
+  relayService.turnOffAll();
+
+   //==================STATE 4: LOOP RELAY (PARALLEL BATCH CHECK)==================//
+  // Test Relay 1 of ALL channels simultaneously, then Relay 2, then Relay 3.
+  PROCESS_UART_DEBUG_PRINTLN("STATE 4: PARALLEL RELAY TEST & LEAKAGE CHECK");
+  // const uint32_t LEAKAGE_THRESHOLD = 500;  // Old threshold
+
+  // Loop through Relay Indices (0 -> 1 -> 2)
+  for (int j = 0; j < 3; j++) {
+      PROCESS_UART_DEBUG_PRINT("Testing Relay Index: ");
+      PROCESS_UART_DEBUG_PRINTLN(j + 1);
+
+      // 1. Turn ON Relay 'j' for all valid channels
+      for (int i = 0; i < 4; i++) {
+           if ( (LOW_THRESHOLD<=kVoltage[i]<=HIGH_THRESHOLD) &
+            (LOW_THRESHOLD<=kCurrent[i][j]<=HIGH_THRESHOLD) &
+            (LOW_THRESHOLD<=kPower[i][j]<=HIGH_THRESHOLD) &
+            write_eeprom_success[i] & zero_detect_get_result(i)) {
+               relayService.setRelayState(i * 3 + j, true);
+           }
+      }
+      delay(1000); // Stabilize load
+
+      // 2. Measure ALL channels
+      for (int m_ch = 0; m_ch < 4; m_ch++) {
+          read_bl0906_channel(m_ch, uartBl0906[m_ch]);
+      }
+
+      // 3. Verify: Check that relays NOT supposed to be ON are indeed ~0
+      for (int ch_chk = 0; ch_chk < 4; ch_chk++) {
+          for (int r_chk = 0; r_chk < 3; r_chk++) {
+              // Determine if this specific relay (ch_chk, r_chk) was turned ON
+              bool should_be_on = (r_chk == j);
+
+              if (!should_be_on) {
+                  // This relay was NOT turned on. It MUST measure near zero.
+                  if (channel_measurements[ch_chk].current[r_chk] > 100 || 
+                      channel_measurements[ch_chk].active_power[r_chk] > 20) {
+                        
+                        check_relay_result[ch_chk][r_chk] = false; // Mark Fail
+                        
+                        PROCESS_UART_DEBUG_PRINT("FAIL: LEAKAGE DETECTED | Ch: ");
+                        PROCESS_UART_DEBUG_PRINT(ch_chk + 1);
+                        PROCESS_UART_DEBUG_PRINT(" Rel: ");
+                        PROCESS_UART_DEBUG_PRINT(r_chk + 1);
+                        PROCESS_UART_DEBUG_PRINT(" Val: ");
+                        PROCESS_UART_DEBUG_PRINTLN(channel_measurements[ch_chk].current[r_chk]);
+                  }
+              }
+          }
+      }
+
+      // 4. Turn OFF Relay 'j' for all channels
+      for (int i = 0; i < 4; i++) {
+           relayService.setRelayState(i * 3 + j, false);
+      }
+  }
+
+  //==================STATE 5: GET RESULT (FINAL RELAY STATE)==================//
   // Kiểm tra kết quả và điều khiển relay
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 3; j++) {
+      bool system_checks_ok = (LOW_THRESHOLD<=kVoltage[i]<=HIGH_THRESHOLD) &
+                              (LOW_THRESHOLD<=kCurrent[i][j]<=HIGH_THRESHOLD) &
+                              (LOW_THRESHOLD<=kPower[i][j]<=HIGH_THRESHOLD) &
+                              write_eeprom_success[i] &
+                              zero_detect_get_result(i);
+      
+      // If ANY check failed (Leakage OR System), force OFF. Else ON if configured to stay ON.
+      if (!check_relay_result[i][j] || !system_checks_ok) {
+          relayService.setRelayState(i * 3 + j, false);
+      }
+      else {
+        relayService.setRelayState(i * 3 + j, true);
+      }
+    }
+  }
+
   // Output log results
   for (int i = 0; i < 4; i++) {
     bool zero_ok = zero_detect_get_result(i);
@@ -517,6 +609,7 @@ void start_process(void) {
       PROCESS_UART_DEBUG_PRINTLN(i + 1);
     }
   }
+
   // Write eeprom status
   for (int i = 0; i < 4; i++) {
     PROCESS_UART_DEBUG_PRINT("Write eeprom is:");
@@ -524,74 +617,26 @@ void start_process(void) {
     PROCESS_UART_DEBUG_PRINT(" for channel: ");
     PROCESS_UART_DEBUG_PRINTLN(i + 1);
   }
-  UART_DEBUG.println("Process done"); 
-  UART_DEBUG.print("Time process: ");
-  UART_DEBUG.println(millis() - start_time_ms);
 
-
-  // state 5 là bật lần lượt từng relay 1, 2, 3 của từng channel để kiểm tra các chân relay có chập không, chỉ bật tắt cho những kênh pass hết cả 3 kênh.
-  // Quá trình này diễn ra trong 30s
-  //==================STATE 5: LOOP RELAY==================//
-  //==================STATE 5: LOOP RELAY (SEQUENTIAL LEAKAGE CHECK)==================//
-  // Test each relay individually. If an OFF channel/relay has energy > threshold => FAIL.
-  PROCESS_UART_DEBUG_PRINTLN("STATE 5: SEQUENTIAL RELAY TEST & LEAKAGE CHECK");
-  const uint32_t LEAKAGE_THRESHOLD = 500; // Threshold for "OFF" state current/power (adjust unit as needed)
-
-  // Loop through Relays (0-2) and Channels (0-3)
-  for (int j = 0; j < 3; j++) {
-    for (int i = 0; i < 4; i++) {
-        // Only test if this specific relay channel passed calibration/zero-detect checks
-        if (channel_measurements[i].voltage_ok &&
-            channel_measurements[i].current_ok[j] &&
-            channel_measurements[i].power_ok[j] &&
-            write_eeprom_success[i] &&
-            zero_detect_get_result(i)) {
-            
-            // 1. Turn ON the target relay
-            relayService.setRelayState(i * 3 + j, true);
-            delay(1000); // Stabilize load
-
-            // 2. Measure ALL channels to detect leakage
-            for (int m_ch = 0; m_ch < 4; m_ch++) {
-                read_bl0906_channel(m_ch, uartBl0906[m_ch]);
-            }
-
-            // 3. Verify: The ON relay may have load, but others MUST be ~0
-            for (int ch_chk = 0; ch_chk < 4; ch_chk++) {
-                for (int r_chk = 0; r_chk < 3; r_chk++) {
-                    bool is_target = (ch_chk == i && r_chk == j);
-                    
-                    if (!is_target) {
-                        // Check for unexpected Current or Power (Leakage)
-                        if (channel_measurements[ch_chk].current[r_chk] > LEAKAGE_THRESHOLD || 
-                            channel_measurements[ch_chk].active_power[r_chk] > LEAKAGE_THRESHOLD) {
-                             PROCESS_UART_DEBUG_PRINT("FAIL: LEAKAGE DETECTED | Ch: ");
-                             PROCESS_UART_DEBUG_PRINT(ch_chk + 1);
-                             PROCESS_UART_DEBUG_PRINT(" Rel: ");
-                             PROCESS_UART_DEBUG_PRINT(r_chk + 1);
-                             PROCESS_UART_DEBUG_PRINT(" Val: ");
-                             PROCESS_UART_DEBUG_PRINT(channel_measurements[ch_chk].current[r_chk]);
-                             PROCESS_UART_DEBUG_PRINTLN(" (Target was different)");
-                        }
-                    } else {
-                         // Optional: Log the active load
-                         PROCESS_UART_DEBUG_PRINT("Active Load Ch: ");
-                         PROCESS_UART_DEBUG_PRINT(i + 1);
-                         PROCESS_UART_DEBUG_PRINT(" Rel: ");
-                         PROCESS_UART_DEBUG_PRINT(j + 1);
-                         PROCESS_UART_DEBUG_PRINT(" Current: ");
-                         PROCESS_UART_DEBUG_PRINTLN(channel_measurements[i].current[j]);
-                    }
-                }
-            }
-
-            // 4. Turn OFF
-            relayService.setRelayState(i * 3 + j, false);
-            delay(500); // Wait before next test
-        }
+  // Output Relay Failure Logs
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 3; j++) {
+      if(check_relay_result[i][j] == false) {
+        PROCESS_UART_DEBUG_PRINT("Channel ");
+        PROCESS_UART_DEBUG_PRINT(i + 1);
+        PROCESS_UART_DEBUG_PRINT(" Relay ");
+        PROCESS_UART_DEBUG_PRINT(j + 1);
+        PROCESS_UART_DEBUG_PRINTLN(" is alway on (Leakage Fail)");
+      } 
     }
   }
+ 
+  PROCESS_UART_DEBUG_PRINTLN("Process done"); 
+  PROCESS_UART_DEBUG_PRINT("Time process: ");
+  PROCESS_UART_DEBUG_PRINTLN(millis() - start_time_ms);
 
   //==================STATE 6: END PROCESS - TURN OFF ALL RELAY==================//
-  relayService.turnOffAll();
+  // Warning: If we run this, the LEDs/Relays showing the result will turn OFF immediately.
+  // The original user code had this. If you want to SEE the result (Pass=ON), verify this line.
 }  
+
