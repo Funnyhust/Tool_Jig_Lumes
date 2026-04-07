@@ -114,14 +114,10 @@ typedef enum {
 typedef struct {
   float current[3]; // 3 kênh dòng điện (I1, I2, I3) - đơn vị: mA
   float voltage;    // Điện áp - đơn vị: V
-  float
-      active_power[3]; // 3 kênh công suất (WATT_1, WATT_2, WATT_3) - đơn vị: W
-  float power_factor;
-  uint16_t volatge_calib[5];
-  uint16_t current_calib[3][5];
-  uint16_t active_power_calib[3][5];
-  uint16_t temperature;
-  uint8_t active_energy;
+  float active_power[3]; // 3 kênh công suất (WATT_1, WATT_2, WATT_3) - đơn vị: W
+  float active_energy;  // Năng lượng hoạt động - đơn vị: kWh
+  float power_factor;   // Hệ số công suất
+  float temperature;    // Nhiệt độ - đơn vị: °C
   bool voltage_ok = false;
   bool current_ok[3] = {false, false, false};
   bool power_ok[3] = {false, false, false};

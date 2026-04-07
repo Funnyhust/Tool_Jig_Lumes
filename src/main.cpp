@@ -1,26 +1,3 @@
-/*******************************************************************************
- *				 _ _ _ _ |   | (_ _) |   |        _ _     _ _ _
- _ _ _ _ _ _ _ _ _   _ _ |   |       |   |   |   | |    _ _     _ _    | |   |
-                                |   |       |   |   |   | |   |   |   |   |   |
- |   | |   |       |   |   |   | |   |   |   |   |   | |   | |   |_ _ _  |   |_
- _|   | |   |   |   |   |   | |   |
-                                |_ _ _ _ _| |_ _ _ _ _ _| |_ _|   |_ _|   |_ _|
- |_ _| (C)2022 Lumi
- * Copyright (c) 2022
- * Lumi, JSC.
- * All Rights Reserved
- *
- * File name: main.cpp
- *
- * Description:
- *
- *
- * Last Changed By:  $Author: duongnv $
- * Revision:         $Revision: 1.0.0 $
- * Last Changed:     $Date: January 21, 2026 $
- *
- * Code sample:
- ******************************************************************************/
 #include "app/process.h"
 #include "config.h"
 #include "services/control_power/control_power.h"
@@ -109,6 +86,7 @@ void checkClockStatus() {
 }
 
 void setup() {
+  first_write_memory_all_channels();
   debug_init();
   pinMode(LED_PIN, OUTPUT);
   relayService.init();
@@ -119,8 +97,9 @@ void setup() {
 }
 
 void loop() {
-  if (is_return_power_control_signal()) {
-    if (is_first_run) {
+    if (is_return_power_control_signal()) {
+      if (is_first_run) {
+      
       UART_DEBUG.println("Power control signal detected");
       delay(2000);
       control_power_on();
@@ -128,13 +107,19 @@ void loop() {
       process_init();
       ledBlinkEnable = true;
       start_process();
+      time_end_process = millis();
       ledBlinkEnable = false;
       digitalWrite(LED_PIN, LOW);
     }
   }
+  //Nếu thời gian quá 5s thì reset is first run
+  // if (  is_first_run && millis() - time_end_process >= 5000) {
+  //   is_first_run = true;
+  // }
 
   if (millis() - time_end_process >= 30000) {
     relayService.turnOffAll();
+    UART_DEBUG.println("30s timeout, turn off all relays");
   }
   if (UART_DEBUG.available()) {
     uint8_t data = UART_DEBUG.read();

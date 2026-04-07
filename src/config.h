@@ -90,7 +90,7 @@
 #define CON_RELAY4B PE0  // Relay 4B
 #define CON_RELAY4C PB9  // Relay 4C
 
-#define PROCESS_DEBUG_ENABLE true
-#define BL0906_DBG_EN false
-#define EEPROM_TEST_ENABLE false
+#define PROCESS_DEBUG_ENABLE 1
+#define BL0906_DBG_EN 0
+#define EEPROM_TEST_ENABLE 0
 #endif

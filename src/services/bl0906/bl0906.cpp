@@ -1204,7 +1204,6 @@ void bl0906_reset_measurements(void) {
   for(int k=0; k<3; k++) {
     measurement_values[current_channel].current_ok[k] = false;
     measurement_values[current_channel].power_ok[k] = false;
-    measurement_values[current_channel].active_power[k] = 0;
   }
 }
 
