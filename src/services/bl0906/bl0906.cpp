@@ -17,7 +17,7 @@
  * Description:
  *
  *
- * Last Changed By:  $Author: duongnv $
+ * Last Changed By:  $Author: dungtv $
  * Revision:         $Revision: 1.0.0 $
  * Last Changed:     $Date: January 21, 2026 $
  *
@@ -134,6 +134,14 @@ static gain_par_t gain_par[4] = { // Mảng gain_par cho 4 kênh
     {.value = 0, .set_gain_st_t_ms = 0},
     {.value = 0, .set_gain_st_t_ms = 0}};
 
+static float get_active_gain_i(uint8_t channel) {
+  if (channel >= 4) return 1.0f;
+  if ((gain_par[channel].value & 0xFFFF00) == GAIN_1_DEFAULT_VALUE) {
+    return 16.0f;
+  }
+  return 1.0f;
+}
+
 // ========== SYNC (Blocking) Variables ==========
 static bool sync_read_waiting = false;
 static uint8_t sync_read_register = REG_UNKNOWN;
@@ -223,6 +231,12 @@ void bl0906_set_channel(uint8_t channel) {
       measurement_values[channel].current_ok[k] = false;
       measurement_values[channel].power_ok[k] = false;
     }
+  }
+}
+
+void bl0906_set_channel_no_reset(uint8_t channel) {
+  if (channel < 4) {
+    current_channel = channel;
   }
 }
 
@@ -341,9 +355,10 @@ static void bl0906_handle_current_rsp(uint8_t *par, uint8_t par_len) {
   DBG_BL0906_SEND_STR_INFO(")");
 
   // Tính toán dòng điện
-  // Công thức: I = data * Vref / (12875 * Rl * Gain_i)
+  // Công thức: I = data * Vref / (12875 * Rl * active_gain_i)
   // Rl = 2 mOhm = 0.002 Ohm
-  float ampere_value = (float)data * Vref / (12875.0f * Rl * Gain_i);
+  float active_gain_i = get_active_gain_i(current_channel);
+  float ampere_value = (float)data * Vref / (12875.0f * Rl * active_gain_i);
   float current_ma = ampere_value * 1000.0f; // A to mA
 
   uint8_t index, correction_reg;
@@ -381,7 +396,7 @@ static void bl0906_handle_current_rsp(uint8_t *par, uint8_t par_len) {
   DBG_BL0906_SEND_STR_INFO(", Rl=");
   DBG_Bl0906_SEND_FLOAT(Rl);
   DBG_BL0906_SEND_STR_INFO(", Gain_i=");
-  DBG_BL0906_SEND_INT(Gain_i);
+  DBG_Bl0906_SEND_FLOAT(active_gain_i);
   DBG_BL0906_SEND_STR_INFO("\nBL0906: Current[");
   DBG_BL0906_SEND_INT(index);
   DBG_BL0906_SEND_STR_INFO("] result = ");
@@ -518,8 +533,9 @@ static void bl0906_handle_active_power_rsp(uint8_t *par, uint8_t par_len) {
     DBG_BL0906_SEND_STR("\n Power Unused");
     return;
   } else {
+    float active_gain_i = get_active_gain_i(current_channel);
     power_value = (float)data * Vref * Vref * (Rf + Rv) /
-                  (40.4125 * Rl * Rv * Gain_i * Gain_v * 1000);
+                  (40.4125 * Rl * Rv * active_gain_i * Gain_v * 1000);
   }
 
   // Xác định index dựa vào register
@@ -670,119 +686,75 @@ static void bl0906_set_gain_proc(void) {
     return;
   }
 
-  DBG_BL0906_SEND_STR_INFO("\nbl0906_set_gain_proc - Channel ");
-  DBG_BL0906_SEND_INT(current_channel);
-  DBG_BL0906_SEND_STR_INFO("\ngain_par[");
-  DBG_BL0906_SEND_INT(current_channel);
-  DBG_BL0906_SEND_STR_INFO("].value=");
-  DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
-  DBG_BL0906_SEND_STR_INFO("\nGAIN_1_DEFAULT_VALUE=");
-  DBG_Bl0906_SEND_DWORD(GAIN_1_DEFAULT_VALUE);
+  // Đọc gain hiện tại trực tiếp từ thanh ghi để đảm bảo chính xác
+  bl0906_read_register(GAIN_1);
 
-  // Nếu chưa đọc gain lần nào cho kênh này, đọc trước để biết giá trị hiện tại
-  if (gain_par[current_channel].value == 0 &&
-      gain_par[current_channel].set_gain_st_t_ms == 0) {
+  if ((gain_par[current_channel].value & 0xFFFF00) != GAIN_1_DEFAULT_VALUE) {
     DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
     DBG_BL0906_SEND_INT(current_channel);
-    DBG_BL0906_SEND_STR_INFO(" First time - reading GAIN_1");
-    bl0906_read_register(GAIN_1);
-  }
+    DBG_BL0906_SEND_STR_INFO(" Gain not equal to default value (x16). Attempting to set...");
+    
+    // Kiểm tra UART trước khi set gain
+    if (p_uart_service == NULL || p_uart_service->getSerial() == NULL) {
+      DBG_BL0906_SEND_STR_ERROR("\nBL0906: Channel ");
+      DBG_BL0906_SEND_INT(current_channel);
+      DBG_BL0906_SEND_STR_ERROR(" UART is NULL! Cannot set gain.");
+      return;
+    }
 
-  if (gain_par[current_channel].value != GAIN_1_DEFAULT_VALUE) {
-    DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
-    DBG_BL0906_SEND_INT(current_channel);
-    DBG_BL0906_SEND_STR_INFO(" Gain not equal to default value");
-    // Cho phép set gain ngay lần đầu (set_gain_st_t_ms = 0) hoặc sau interval
-    if (gain_par[current_channel].set_gain_st_t_ms == 0 ||
-        clock_time_exceed_ms(gain_par[current_channel].set_gain_st_t_ms,
-                             SET_GAIN_INTERVAL_MS)) {
-      // Kiểm tra UART trước khi set gain
-      if (p_uart_service == NULL || p_uart_service->getSerial() == NULL) {
-        DBG_BL0906_SEND_STR_ERROR("\nBL0906: Channel ");
-        DBG_BL0906_SEND_INT(current_channel);
-        DBG_BL0906_SEND_STR_ERROR(" UART is NULL! Cannot set gain.");
-        return;
-      }
+    // Retry với verify để đảm bảo 100% thành công
+    const uint8_t MAX_RETRY = 3;
+    bool set_success = false;
 
-      // Retry với verify để đảm bảo 100% thành công
-      const uint8_t MAX_RETRY = 3;
-      bool set_success = false;
+    for (uint8_t retry = 0; retry < MAX_RETRY && !set_success; retry++) {
+      DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
+      DBG_BL0906_SEND_INT(current_channel);
+      DBG_BL0906_SEND_STR_INFO(" Set gain attempt ");
+      DBG_BL0906_SEND_INT(retry + 1);
 
-      for (uint8_t retry = 0; retry < MAX_RETRY && !set_success; retry++) {
+      // Flush UART trước khi set gain để đảm bảo buffer sạch
+      p_uart_service->getSerial()->flush();
+
+      // Set gain
+      bl_0906_set_gain(GAIN_1_DEFAULT_VALUE, NULL);
+      delay(5); // Đợi ghi xong
+
+      // Verify: Đọc lại để kiểm tra
+      bl0906_read_register(GAIN_1);
+
+      // Kiểm tra xem gain đã được set đúng chưa
+      if ((gain_par[current_channel].value & 0xFFFF00) == GAIN_1_DEFAULT_VALUE) {
+        set_success = true;
         DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
         DBG_BL0906_SEND_INT(current_channel);
-        DBG_BL0906_SEND_STR_INFO(" Set gain attempt ");
-        DBG_BL0906_SEND_INT(retry + 1);
-        // UART_DEBUG.print("DEBUG_UART: ");
-        // UART_DEBUG.println(retry+1);
-
-        // Flush UART trước khi set gain để đảm bảo buffer sạch
-        p_uart_service->getSerial()->flush();
-
-        // Set gain
-        bl_0906_set_gain(GAIN_1_DEFAULT_VALUE, NULL);
-        delay(5); // Đợi ghi xong
-
-        // Verify: Đọc lại để kiểm tra
-        bl0906_read_register(GAIN_1);
-        // UART_DEBUG.println("============================== ");
-        // UART_DEBUG.print("Channel: ");
-        // UART_DEBUG.println(current_channel);
-        // UART_DEBUG.println(gain_par[current_channel].value);
-        // UART_DEBUG.print("============================== ");
-
-        // Kiểm tra xem gain đã được set đúng chưa
-        if ((gain_par[current_channel].value & 0xFFFF00) ==
-            GAIN_1_DEFAULT_VALUE) {
-          set_success = true;
-          DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
-          DBG_BL0906_SEND_INT(current_channel);
-          DBG_BL0906_SEND_STR_INFO(" Set gain SUCCESS");
-
-          // UART_DEBUG.print("Channel: ");
-          // UART_DEBUG.print(current_channel);
-          // UART_DEBUG.println(" Set gain SUCCESS");
-          delay(500);
-          break;
-        } else {
-          DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
-          DBG_BL0906_SEND_INT(current_channel);
-          DBG_BL0906_SEND_STR_INFO(" Set gain FAILED (read=");
-          // UART_DEBUG.print("Channel: ");
-          // UART_DEBUG.print(current_channel);
-          // UART_DEBUG.println(" Set gain Fail");
-          DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
-          DBG_BL0906_SEND_STR_INFO("), retry...");
-          // delay(50);  // Đợi trước khi retry
-        }
-      }
-
-      if (!set_success) {
-        DBG_BL0906_SEND_STR_ERROR("\nBL0906: Channel ");
+        DBG_BL0906_SEND_STR_INFO(" Set gain SUCCESS");
+        delay(50);
+        break;
+      } else {
+        DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
         DBG_BL0906_SEND_INT(current_channel);
-        DBG_BL0906_SEND_STR_ERROR(" Set gain FAILED after ");
-        DBG_BL0906_SEND_INT(MAX_RETRY);
-
-        // UART_DEBUG.print("Channel: ");
-        // UART_DEBUG.print(current_channel);
-        // UART_DEBUG.println(" Set gain Fail after");
-        // UART_DEBUG.println(MAX_RETRY);
-        // UART_DEBUG.println(gain_par[current_channel].value);
-        DBG_BL0906_SEND_STR_ERROR(" attempts!");
+        DBG_BL0906_SEND_STR_INFO(" Set gain FAILED (read=");
+        DBG_Bl0906_SEND_DWORD(gain_par[current_channel].value);
+        DBG_BL0906_SEND_STR_INFO("), retry...");
       }
+    }
 
-      gain_par[current_channel].set_gain_st_t_ms = clock_time_ms();
+    if (!set_success) {
+      DBG_BL0906_SEND_STR_ERROR("\nBL0906: Channel ");
+      DBG_BL0906_SEND_INT(current_channel);
+      DBG_BL0906_SEND_STR_ERROR(" Set gain FAILED after ");
+      DBG_BL0906_SEND_INT(MAX_RETRY);
+      DBG_BL0906_SEND_STR_ERROR(" attempts! Fallback to Gain = x1 will be used.");
     }
   } else {
     DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
     DBG_BL0906_SEND_INT(current_channel);
-    DBG_BL0906_SEND_STR_INFO(" Gain already correct");
+    DBG_BL0906_SEND_STR_INFO(" Gain is healthy (x16).");
   }
 }
+
 void bl0906_proc(void) {
-  if (Gain_i == 16) {
-    bl0906_set_gain_proc();
-  }
+  bl0906_set_gain_proc();
 }
 /**
  * @func    _culcCheckSum
@@ -1075,6 +1047,19 @@ void bl0906_get_active_power(void) {
   bl0906_read_register(WATT_2);
   bl0906_read_register(
       WATT_3); // Không cần delay vì đã có trong bl0906_read_register()
+}
+
+/**
+ * @func    bl0906_get_gain
+ * @brief   Đọc giá trị thanh ghi GAIN_1 hiện tại
+ * @param   None
+ * @retval  None
+ */
+void bl0906_get_gain(void) {
+  // Read register 0x60 (GAIN_1) via standard blocking read
+  bl0906_read_register(GAIN_1);
+  // The handler bl0906_handle_gain_rsp will update gain_par
+  measurement_values[current_channel].gain = gain_par[current_channel].value;
 }
 
 /**

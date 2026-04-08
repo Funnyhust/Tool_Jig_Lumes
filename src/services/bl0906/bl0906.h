@@ -73,10 +73,10 @@ enum {
   REG_UNKNOWN = 0xFF,
 };
 
-#define VOLTAGE_THRESHOLD 230
-#define CURRENT_THRESHOLD 10
+#define BL0906_VOLTAGE_THRESHOLD 230
+#define BL0906_CURRENT_THRESHOLD 10
 #define ACTIVE_POWER_THRESHOLD 10
-#define POWER_THRESHOLD 44
+#define BL0906_POWER_THRESHOLD 44
 
 #define VOLTAGE_THRESHOLD_LOW 215
 #define CURRENT_THRESHOLD_LOW 196
@@ -118,6 +118,7 @@ typedef struct {
   float active_energy;  // Năng lượng hoạt động - đơn vị: kWh
   float power_factor;   // Hệ số công suất
   float temperature;    // Nhiệt độ - đơn vị: °C
+  uint32_t gain;        // Thanh ghi GAIN1 (0x60) đo được
   bool voltage_ok = false;
   bool current_ok[3] = {false, false, false};
   bool power_ok[3] = {false, false, false};
@@ -173,7 +174,8 @@ void bl0906_init(typeBl0906_handle_update_energy func,
                  UartService *uart_service);
 void bl0906_set_uart(
     UartService *uart_service); // Set UART tạm thời để đọc từ kênh khác
-void bl0906_set_channel(uint8_t channel); // Set channel hiện tại (0-3)
+void bl0906_set_channel(uint8_t channel); // Set channel hiện tại (0-3) và xóa dữ liệu cũ
+void bl0906_set_channel_no_reset(uint8_t channel); // Set channel mà không xóa dữ liệu
 void bl0906_set_debug_uart(UartService *debug_uart); // Set UART để log debug
 void bl0906_reset_measurements(void); // Reset giá trị đo của kênh hiện tại về 0
 bool bl0906_is_correction_complete_or_timeout(void);
@@ -187,6 +189,7 @@ void bl0906_get_active_power(void);
 void bl0906_get_active_energy(void);
 void bl0906_get_power_factor(void);
 void bl0906_get_temperature(void);
+void bl0906_get_gain(void); // Đo thanh ghi gain 1
 void bl0906_measurenment_start(uint16_t m_mask);
 void bl_0906_set_gain(
     uint32_t gain,
