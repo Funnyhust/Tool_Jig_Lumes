@@ -86,7 +86,7 @@ void checkClockStatus() {
 }
 
 void setup() {
-  first_write_memory_all_channels();
+  //first_write_memory_all_channels();
   debug_init();
   pinMode(LED_PIN, OUTPUT);
   relayService.init();

@@ -427,10 +427,112 @@ static void read_bl0906_channel(int channel, UartService *uart) {
 extern volatile bool ledBlinkEnable;
 
 //===========================================//
+//=========== LOGGING TELEMETRY =============//
+//===========================================//
+
+#define LOG_HEADER       0xAA
+#define LOG_CMD_START    0xA0
+#define LOG_CMD_END      0xA1
+#define LOG_CMD_DATA     0x10
+
+static void send_test_event(uint8_t cmd) {
+  uint8_t pkt[5];
+  pkt[0] = LOG_HEADER;
+  pkt[1] = cmd;
+  pkt[2] = 0x00;
+  pkt[3] = 0x00;
+  pkt[4] = (LOG_HEADER + cmd) & 0xFF;
+  UART_DEBUG.write(pkt, 5);
+}
+
+static void broadcast_data_frame(void) {
+  // Payload layout (77 bytes total):
+  // [0]    Header 0xAA
+  // [1]    CMD 0x10
+  // [2:10] 4xVoltage uint16 x100
+  // [10:34] 12xCurrent uint16 x10
+  // [34:58] 12xPower uint16 x100
+  // [58:74] 4xGain uint32
+  // [74:76] relay bitmask uint16 (bit0=relay0, bit11=relay11)
+  // [76]   Checksum
+  uint8_t buf[77];
+  memset(buf, 0, sizeof(buf)); // Zero-initialize as requested
+  buf[0] = LOG_HEADER;
+  buf[1] = LOG_CMD_DATA;
+
+  for (int ch = 0; ch < 4; ch++) {
+    measurement_value_t &m = channel_measurements[ch];
+
+    // Voltage (x100, uint16, big-endian) — offset 2  [0.01V precision]
+    uint16_t v = (uint16_t)(m.voltage * 100.0f);
+    buf[2 + ch*2]     = (v >> 8) & 0xFF;
+    buf[2 + ch*2 + 1] = v & 0xFF;
+
+    // Current (x10, uint16, big-endian) — offset 10  [0.1mA precision]
+    for (int r = 0; r < 3; r++) {
+      int idx = ch*3 + r;
+      uint16_t cur = (uint16_t)(m.current[r] * 10.0f);
+      buf[10 + idx*2]     = (cur >> 8) & 0xFF;
+      buf[10 + idx*2 + 1] = cur & 0xFF;
+    }
+
+    // Power (x100, uint16, big-endian) — offset 34  [0.01W precision]
+    for (int r = 0; r < 3; r++) {
+      int idx = ch*3 + r;
+      uint16_t pwr = (uint16_t)(m.active_power[r] * 100.0f);
+      buf[34 + idx*2]     = (pwr >> 8) & 0xFF;
+      buf[34 + idx*2 + 1] = pwr & 0xFF;
+    }
+
+    // Gain (uint32, big-endian) — offset 58
+    uint32_t g = m.gain;
+    buf[58 + ch*4]     = (g >> 24) & 0xFF;
+    buf[58 + ch*4 + 1] = (g >> 16) & 0xFF;
+    buf[58 + ch*4 + 2] = (g >> 8)  & 0xFF;
+    buf[58 + ch*4 + 3] = g & 0xFF;
+  }
+
+  // Relay bitmask (uint16, big-endian) — offset 74
+  // bit0 = relay0 (CH1A), bit1 = relay1 (CH1B), ..., bit11 = relay11 (CH4C)
+  uint16_t relay_mask = 0;
+  for (int i = 0; i < 12; i++) {
+    if (relayService.isOn(i)) {
+      relay_mask |= (1 << i);
+    }
+  }
+  buf[74] = (relay_mask >> 8) & 0xFF;
+  buf[75] = relay_mask & 0xFF;
+
+  // Checksum = sum of all bytes 0..75
+  uint8_t cs = 0;
+  for (int i = 0; i < 76; i++) cs += buf[i];
+  buf[76] = cs;
+
+  // Clear buf before each write is not strictly required if we fill all bytes,
+  // but per user request to 'clear buffer', we ensure no garbage bytes.
+  UART_DEBUG.write(buf, 77);
+}
+
+//===========================================//
 //==================PROCESS==================//
 //===========================================//
 
 void start_process(void) {
+  // Gửi sự kiện START cho App Desktop
+  send_test_event(LOG_CMD_START);
+
+  // Clear all measurement buffers and summation logic to prevent stale data (per user request)
+  memset(channel_measurements, 0, sizeof(channel_measurements));
+  memset(voltage_sum_uv, 0, sizeof(voltage_sum_uv));
+  memset(current_sum_ua, 0, sizeof(current_sum_ua));
+  memset(power_sum_uw, 0, sizeof(power_sum_uw));
+  memset(voltage_calib_count, 0, sizeof(voltage_calib_count));
+  memset(current_calib_count, 0, sizeof(current_calib_count));
+  memset(power_calib_count, 0, sizeof(power_calib_count));
+  memset(voltage_calib_value, 0, sizeof(voltage_calib_value));
+  memset(current_calib_value, 0, sizeof(current_calib_value));
+  memset(power_calib_value, 0, sizeof(power_calib_value));
+
   // Init check_relay_result
   for(int i=0; i<4; i++){
       for(int j=0; j<3; j++){
@@ -447,9 +549,12 @@ void start_process(void) {
   PROCESS_UART_DEBUG_PRINTLN("STATE 1: Zero Detect for all channels simultaneously");
   zero_detect_process(); // Measure all 4 channels at once
 
-  //==================STATE 2: READ ALL CHANNELS SEQUENTIALLY==================//
   // Read measurements for each channel one at a time
   for (int ch = 0; ch < 4; ch++) {
+    // Clear ALL measurement buffers before reading this specific channel (per user request)
+    // This ensures that 'old' data from previously measured channels doesn't show up in the log.
+    memset(channel_measurements, 0, sizeof(channel_measurements));
+
     PROCESS_UART_DEBUG_PRINT("========== Reading Channel: ");
     PROCESS_UART_DEBUG_PRINT(ch + 1);
     PROCESS_UART_DEBUG_PRINTLN(" ==========");
@@ -467,16 +572,22 @@ void start_process(void) {
     for(int j=0; j<3; j++) {
       relayService.setRelayState(ch * 3 + j, true);
     }
-    delayWithBlink(1500); // Delay to stabilize
+    //==================STEP 2: PREPARE AND STABILIZE==================//
+    // Set UART and channel BEFORE delay to allow background calibration
+    bl0906_set_uart(uartBl0906[ch]);
+    delay(5); 
+    bl0906_set_channel(ch);
+
+    // Optimized stabilization wait: Try to write GAIN during the idle 3s
+    uint32_t wait_start = millis();
     
-    //==================STEP 2: READ BL0906 FOR THIS CHANNEL==================//
+    while (millis() - wait_start < 3000) {
+        bl0906_proc();
+        delayWithBlink(100); 
+    }
+    
     PROCESS_UART_DEBUG_PRINT("STEP 2: Reading BL0906 for Channel ");
     PROCESS_UART_DEBUG_PRINTLN(ch + 1);
-    
-    // Set UART và channel
-    bl0906_set_uart(uartBl0906[ch]);
-    delay(5); // Đợi UART được set xong
-    bl0906_set_channel(ch);
     
     // Print threshold values
     PROCESS_UART_DEBUG_PRINT("Gia tri tai chuan ");
@@ -508,10 +619,11 @@ void start_process(void) {
       
       // Read this channel only
       read_bl0906_channel(ch, uartBl0906[ch]);
+      broadcast_data_frame(); // << Gửi dữ liệu lên App
       delayWithBlink(2);
       
       if (j < 4) {
-        while (millis() - calib_start_time_ms < 600) {
+        while (millis() - calib_start_time_ms < 500) {
           delayWithBlink(5);
         }
       }
@@ -654,19 +766,28 @@ void start_process(void) {
   // Chỉ FAIL khi cả 3 lần đo đều thất bại (fail_count == NUM_RELAY_MEASUREMENTS).
   PROCESS_UART_DEBUG_PRINTLN("STATE 5: PARALLEL RELAY TEST & LEAKAGE CHECK");
 
+  // Clear all buffers before starting state 5 batch check
+  memset(channel_measurements, 0, sizeof(channel_measurements));
   const int NUM_RELAY_MEASUREMENTS = 3;
 
   // Loop through Relay Indices (0 -> 1 -> 2)
   for (int j = 0; j < 3; j++) {
+      // Clear buffers before EACH relay category test to ensure fresh data
+      memset(channel_measurements, 0, sizeof(channel_measurements));
+      
+      relayService.turnOffAll();
       PROCESS_UART_DEBUG_PRINT("Testing Relay Index: ");
       PROCESS_UART_DEBUG_PRINTLN(j + 1);
 
       // 1. Turn ON Relay 'j' for all valid channels
       for (int i = 0; i < 4; i++) {
-           if ( (LOW_THRESHOLD<=kVoltage[i]<=HIGH_THRESHOLD) &
-            (LOW_THRESHOLD<=kCurrent[i][j]<=HIGH_THRESHOLD) &
-            (LOW_THRESHOLD<=kPower[i][j]<=HIGH_THRESHOLD) &
-            write_eeprom_success[i] & zero_detect_get_result(i)) {
+           // Standard range check: Value must be within [850, 1150]
+           bool voltage_valid = (kVoltage[i] >= LOW_THRESHOLD && kVoltage[i] <= HIGH_THRESHOLD);
+           bool current_valid = (kCurrent[i][j] >= LOW_THRESHOLD && kCurrent[i][j] <= HIGH_THRESHOLD);
+           bool power_valid   = (kPower[i][j] >= LOW_THRESHOLD && kPower[i][j] <= HIGH_THRESHOLD);
+
+           if (voltage_valid && current_valid && power_valid && 
+               write_eeprom_success[i] && zero_detect_get_result(i)) {
                relayService.setRelayState(i * 3 + j, true);
            }
       }
@@ -687,6 +808,7 @@ void start_process(void) {
           for (int m_ch = 0; m_ch < 4; m_ch++) {
               read_bl0906_channel(3 - m_ch, uartBl0906[3 - m_ch]);
           }
+          broadcast_data_frame(); // << Gửi dữ liệu lên App sau mỗi lần đo
 
           // Tích lũy fail_count cho lần đo này
           for (int ch_chk = 0; ch_chk < 4; ch_chk++) {
@@ -772,16 +894,38 @@ void start_process(void) {
   }
 
   //==================STATE 6: GET RESULT (FINAL RELAY STATE)==================//
+  // Log all calibration factors for transparency
+  for (int i = 0; i < 4; i++) {
+      PROCESS_UART_DEBUG_PRINT("He so calib: channel: ");
+      PROCESS_UART_DEBUG_PRINT(i + 1);
+      PROCESS_UART_DEBUG_PRINT(" ||kV: ");
+      PROCESS_UART_DEBUG_PRINT(kVoltage[i]);
+      for (int j = 0; j < 3; j++) {
+          PROCESS_UART_DEBUG_PRINT(" ||kI");
+          PROCESS_UART_DEBUG_PRINT(j);
+          PROCESS_UART_DEBUG_PRINT(": ");
+          PROCESS_UART_DEBUG_PRINT(kCurrent[i][j]);
+          PROCESS_UART_DEBUG_PRINT(" ||kP");
+          PROCESS_UART_DEBUG_PRINT(j);
+          PROCESS_UART_DEBUG_PRINT(": ");
+          PROCESS_UART_DEBUG_PRINT(kPower[i][j]);
+      }
+      PROCESS_UART_DEBUG_PRINTLN("");
+  }
+
   // Kiểm tra kết quả và điều khiển relay
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 3; j++) {
-      bool system_checks_ok = (LOW_THRESHOLD<=kVoltage[i]<=HIGH_THRESHOLD) &
-                              (LOW_THRESHOLD<=kCurrent[i][j]<=HIGH_THRESHOLD) &
-                              (LOW_THRESHOLD<=kPower[i][j]<=HIGH_THRESHOLD) &
-                              write_eeprom_success[i] &
+      bool voltage_valid = (kVoltage[i] >= LOW_THRESHOLD && kVoltage[i] <= HIGH_THRESHOLD);
+      bool current_valid = (kCurrent[i][j] >= LOW_THRESHOLD && kCurrent[i][j] <= HIGH_THRESHOLD);
+      bool power_valid   = (kPower[i][j] >= LOW_THRESHOLD && kPower[i][j] <= HIGH_THRESHOLD);
+
+      bool system_checks_ok = voltage_valid && current_valid && power_valid &&
+                              write_eeprom_success[i] &&
                               zero_detect_get_result(i);
       
-      // If ANY check failed (Leakage OR System), force OFF. Else ON if configured to stay ON.
+      // If ANY check failed (Leakage OR System/Calibration), force OFF. 
+      // Else ON if both the relay itself passed and systemic checks (Voltage/Calibration) are OK.
       if (!check_relay_result[i][j] || !system_checks_ok) {
           relayService.setRelayState(i * 3 + j, false);
       }
@@ -827,6 +971,9 @@ void start_process(void) {
   PROCESS_UART_DEBUG_PRINTLN("Process done"); 
   PROCESS_UART_DEBUG_PRINT("Time process: ");
   PROCESS_UART_DEBUG_PRINTLN(millis() - start_time_ms);
+
+  // Gửi sự kiện END cho App Desktop
+  send_test_event(LOG_CMD_END);
 
   //==================STATE 6: END PROCESS - TURN OFF ALL RELAY==================//
   // Warning: If we run this, the LEDs/Relays showing the result will turn OFF immediately.

@@ -591,12 +591,8 @@ static void bl0906_handle_temperature_rsp(uint8_t *par, uint8_t par_len) {
 static void bl0906_handle_gain_rsp(uint8_t *par, uint8_t par_len) {
   // Cập nhật gain_par cho kênh hiện tại
   gain_par[current_channel].value = array_to_u24(par);
-  // UART_DEBUG.println("============AAAAAAAAAAA===========");
-  // UART_DEBUG.println("Channel: ");
-  // UART_DEBUG.println(current_channel);
-  // UART_DEBUG.println("Value");
-  // UART_DEBUG.println(gain_par[current_channel].value);
-  // UART_DEBUG.println("===========AAAAAAAAAA========");
+  // Đồng bộ sang measurement_values để bl0906_get_all_measurements() trả đúng
+  measurement_values[current_channel].gain = gain_par[current_channel].value;
 
   DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
   DBG_BL0906_SEND_INT(current_channel);
