@@ -38,7 +38,7 @@ void zero_detect_init_pin(void);
 void zero_detect_init(void);
 
 void zero_detect_process(void);
-bool zero_detect_get_result(uint8_t channel); // Trả về count cho 4 kênh (counts
-                                              // phải có ít nhất 4 phần tử)
+bool zero_detect_get_result(uint8_t channel);
+uint32_t zero_detect_get_count(uint8_t channel);
 
 #endif

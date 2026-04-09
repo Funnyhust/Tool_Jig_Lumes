@@ -36,6 +36,7 @@
 // UART3 (PB10/PB11) → BL0906 Channel 3
 // UART4 (PC10/PC11) → BL0906 Channel 4
 // UART5 (PC12/PD2)  → Debug
+extern HardwareSerial Serial5;
 #define UART_DEBUG Serial5
 #define UART_BL0906_1 Serial1
 // #define UART_BL0906_2 Serial2
@@ -90,7 +91,7 @@
 #define CON_RELAY4B PE0  // Relay 4B
 #define CON_RELAY4C PB9  // Relay 4C
 
-#define PROCESS_DEBUG_ENABLE 1
+#define PROCESS_DEBUG_ENABLE 0
 #define BL0906_DBG_EN 0
 #define EEPROM_TEST_ENABLE 0
 #endif

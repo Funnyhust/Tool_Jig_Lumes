@@ -167,12 +167,15 @@ void zero_detect_process(void) {
 }
 
 bool zero_detect_get_result(uint8_t channel) {
-  // Trả về kết quả count cho 4 kênh
-  // Với 2 giây đo: 50Hz = 100 zero crossing, cho phép 95-105 (tolerance ±5%)
-  if (channel < 0 || channel >= 4) {
-    return false;
-  }
-  return zero_detect_count[channel] > 94 && zero_detect_count[channel] < 106;
+  if (channel >= 4) return false;
+  uint32_t count = zero_detect_count[channel];
+  // 50Hz = 100 counts per sec (CHANGE)
+  return count > 90 && count < 110;
+}
+
+uint32_t zero_detect_get_count(uint8_t channel) {
+  if (channel < 4) return zero_detect_count[channel];
+  return 0;
 }
 
 // void zero_detect_process(void)

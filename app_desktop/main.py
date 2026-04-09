@@ -185,6 +185,12 @@ class LumesJigApp(ctk.CTk):
                                            fg_color="#1a5fa0",
                                            command=self._toggle_connect)
         self._btn_connect.pack(pady=10, padx=12, fill="x")
+
+        self._btn_mock = ctk.CTkButton(sb, text="MOCK UP DATA",
+                                         fg_color="#444", text_color="#aaa",
+                                         command=self._load_mock_data)
+        self._btn_mock.pack(pady=(0, 10), padx=12, fill="x")
+
         ctk.CTkFrame(sb, height=1, fg_color="#222").pack(fill="x", padx=16, pady=8)
 
         self._frame_lbl = ctk.CTkLabel(sb, text="Sessions: 0  |  Frames: 0",
@@ -212,14 +218,84 @@ class LumesJigApp(ctk.CTk):
         self._tabs.pack(side="right", fill="both", expand=True, padx=6, pady=6)
 
         self._tab_live    = self._tabs.add("LIVE")
+        self._tab_summary = self._tabs.add("CALIBRATION")
         self._tab_log     = self._tabs.add("SESSION LOG")
         self._tab_history = self._tabs.add("TEST HISTORY")
         self._tab_syslog  = self._tabs.add("SYSTEM LOGS")
 
         self._build_live_tab()
+        self._build_summary_tab()
         self._build_log_tab()
         self._build_history_tab()
         self._build_syslog_tab()
+
+    # ── Summary Tab ────────────────────────────
+    def _build_summary_tab(self):
+        scroll = ctk.CTkScrollableFrame(self._tab_summary, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=4, pady=4)
+        
+        self._summary_cards = []
+        for ch in range(4):
+            card = ctk.CTkFrame(scroll, border_width=1, border_color="#222",
+                                fg_color="#0d0d1a", corner_radius=10)
+            card.pack(fill="x", padx=10, pady=8)
+            
+            # Header
+            hdr = ctk.CTkFrame(card, fg_color="#1a1a2e", corner_radius=8, height=36)
+            hdr.pack(fill="x", padx=2, pady=2)
+            hdr.pack_propagate(False)
+            
+            ctk.CTkLabel(hdr, text=f"CHANNEL {ch+1} SUMMARY", 
+                         font=ctk.CTkFont(size=14, weight="bold"),
+                         text_color=CH_COLORS[ch]).pack(side="left", padx=12)
+            
+            res_lbl = ctk.CTkLabel(hdr, text="WAITING...", font=ctk.CTkFont(size=12, weight="bold"), text_color="#555")
+            res_lbl.pack(side="right", padx=12)
+            
+            # Content Grid
+            body = ctk.CTkFrame(card, fg_color="transparent")
+            body.pack(fill="x", padx=15, pady=10)
+            
+            # Left side: Status checks
+            col_l = ctk.CTkFrame(body, fg_color="transparent")
+            col_l.pack(side="left", fill="both", expand=True)
+            
+            checks = {}
+            for i, label_txt in enumerate(["Zero Detect", "Calibration Range", "EEPROM Write"]):
+                row = ctk.CTkFrame(col_l, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text=f"• {label_txt}:", font=ctk.CTkFont(size=11), text_color="#aaa").pack(side="left")
+                val = ctk.CTkLabel(row, text="---", font=ctk.CTkFont(size=11, weight="bold"), text_color="#444")
+                val.pack(side="right", padx=10)
+                checks[label_txt] = val
+                
+            # Right side: Relay mechanical checks
+            col_r = ctk.CTkFrame(body, fg_color="transparent")
+            col_r.pack(side="right", fill="both", expand=True)
+            relays = []
+            for r in range(3):
+                row = ctk.CTkFrame(col_r, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text=f"Relay {REL_NAMES[r]}:", font=ctk.CTkFont(size=11), text_color="#aaa").pack(side="left")
+                val = ctk.CTkLabel(row, text="---", font=ctk.CTkFont(size=11, weight="bold"), text_color="#444")
+                val.pack(side="right", padx=10)
+                relays.append(val)
+                
+            # Bottom: Calibration Factors Table
+            k_f = ctk.CTkFrame(card, fg_color="#05050a", corner_radius=6)
+            k_f.pack(fill="x", padx=10, pady=(0,10))
+            
+            k_txt = ctk.CTkTextbox(k_f, height=80, font=ctk.CTkFont(family="Consolas", size=11), fg_color="transparent", text_color="#88ccee")
+            k_txt.pack(fill="x", padx=5, pady=5)
+            k_txt.insert("1.0", "Calibration Factors (K) will appear here after end of test.")
+            k_txt.configure(state="disabled")
+            
+            self._summary_cards.append({
+                "header": res_lbl,
+                "checks": checks,
+                "relays": relays,
+                "k_box": k_txt
+            })
 
     # ── Live Tab ──────────────────────────────────
     def _build_live_tab(self):
@@ -278,14 +354,19 @@ class LumesJigApp(ctk.CTk):
         ctk.CTkButton(top, text="Clear", width=70, height=26, fg_color="#222",
                       command=self._clear_log).pack(side="right")
 
-        cols_up = ("Frm#", "T(s)", "V1","1A-I","1A-P","1B-I","1B-P","1C-I","1C-P","Gain1", "V2","2A-I","2A-P","2B-I","2B-P","2C-I","2C-P","Gain2")
-        cols_dn = ("Frm#", "T(s)", "V3","3A-I","3A-P","3B-I","3B-P","3C-I","3C-P","Gain3", "V4","4A-I","4A-P","4B-I","4B-P","4C-I","4C-P","Gain4")
+        # Sub-tabs for each channel to make it easy to read
+        self._log_tabs = ctk.CTkTabview(self._tab_log, fg_color="#0a0a12", height=40)
+        self._log_tabs.pack(fill="both", expand=True, padx=4, pady=4)
         
-        self._log_table_up = JigTable(self._tab_log, cols_up, title="[ CH 1 & 2 ]")
-        self._log_table_up.pack(fill="both", expand=True, padx=4, pady=4)
+        self._log_tables = []
+        cols = ("Frm#", "T(s)", "Voltage", "IA(mA)", "PA(W)", "IB(mA)", "PB(W)", "IC(mA)", "PC(W)", "Gain")
         
-        self._log_table_dn = JigTable(self._tab_log, cols_dn, title="[ CH 3 & 4 ]")
-        self._log_table_dn.pack(fill="both", expand=True, padx=4, pady=4)
+        for ch in range(4):
+            nm = f"CHANNEL {ch+1}"
+            t = self._log_tabs.add(nm)
+            tbl = JigTable(t, cols)
+            tbl.pack(fill="both", expand=True)
+            self._log_tables.append(tbl)
 
     # ── Test History Tab (Master-Detail) ──────────
     def _build_history_tab(self):
@@ -329,15 +410,16 @@ class LumesJigApp(ctk.CTk):
                                              font=ctk.CTkFont(size=11, weight="bold"), text_color="#777")
         self._hist_detail_lbl.pack(side="left", padx=10)
 
-        # Columns for detailed frame view (split layout)
-        cols_up = ("Frm#", "T(s)", "V1","1A-I","1A-P","1B-I","1B-P","1C-I","1C-P","Gain1", "V2","2A-I","2A-P","2B-I","2B-P","2C-I","2C-P","Gain2")
-        cols_dn = ("Frm#", "T(s)", "V3","3A-I","3A-P","3B-I","3B-P","3C-I","3C-P","Gain3", "V4","4A-I","4A-P","4B-I","4B-P","4C-I","4C-P","Gain4")
-
-        self._hist_table_up = JigTable(detail_f, cols_up, title="[ CH 1 & 2 ]")
-        self._hist_table_up.pack(fill="both", expand=True, padx=4, pady=2)
+        self._hist_tabs = ctk.CTkTabview(detail_f, fg_color="#0a0a12", height=40)
+        self._hist_tabs.pack(fill="both", expand=True, padx=4, pady=2)
         
-        self._hist_table_dn = JigTable(detail_f, cols_dn, title="[ CH 3 & 4 ]")
-        self._hist_table_dn.pack(fill="both", expand=True, padx=4, pady=2)
+        self._hist_tables = []
+        cols = ("Frm#", "T(s)", "Voltage", "IA(mA)", "PA(W)", "IB(mA)", "PB(W)", "IC(mA)", "PC(W)", "Gain")
+        for ch in range(4):
+            t = self._hist_tabs.add(f"CH {ch+1}")
+            tbl = JigTable(t, cols)
+            tbl.pack(fill="both", expand=True)
+            self._hist_tables.append(tbl)
 
     def _on_history_select(self, _e):
         sel = self._hist_list.selection()
@@ -352,44 +434,38 @@ class LumesJigApp(ctk.CTk):
         self._hist_detail_lbl.configure(text=f"DETAILS: SESSION #{idx+1:03d} ({session['timestamp']})", text_color="#aaccff")
         
         # Clear & Repopulate detail tables
-        self._hist_table_up.clear()
-        self._hist_table_dn.clear()
+        for tbl in self._hist_tables:
+            tbl.clear()
+
         for i, frame in enumerate(session['frames']):
             ts = frame.get("ts_offset", 0)
-            rows, errs = self._format_frame_row(frame, i, ts)
-            self._hist_table_up.append_row(rows[0], errs[0])
-            self._hist_table_dn.append_row(rows[1], errs[1])
+            ch = frame["channel"]
+            row, errs = self._format_frame_row(frame, i, ts, ch)
+            self._hist_tables[ch].append_row(row, errs)
 
-    def _format_frame_row(self, pkt, index, ts):
-        vs = pkt["voltages"]; cs = pkt["currents"]
-        ps = pkt["powers"];   gs = pkt["gains"]
+    def _format_frame_row(self, pkt, index, ts, channel):
+        v = pkt["voltage"]; cs = pkt["currents"]
+        ps = pkt["powers"];   g = pkt["gain"]
         mask = pkt.get("relay_mask", 0)
         
-        # Split into two parts: CH 1&2 and CH 3&4
-        parts = [
-            {"ch_range": (0, 2), "row": [index, f"{ts:.1f}"], "errs": []},
-            {"ch_range": (2, 4), "row": [index, f"{ts:.1f}"], "errs": []}
-        ]
+        row = [index, f"{ts:.1f}"]
+        errs = []
         
-        for p_idx, p in enumerate(parts):
-            ch_start, ch_end = p["ch_range"]
-            for ch in range(ch_start, ch_end):
-                # V
-                p["row"].append(f"{vs[ch]:.2f}")
-                # I & P
-                for r in range(3):
-                    idx = ch * 3 + r
-                    status = JigProtocol.row_status(mask, ch, r, cs[idx], ps[idx])
-                    p["row"].append(f"{cs[idx]:.1f}")
-                    if status in ('fail_low', 'fail_leak'): p["errs"].append(len(p["row"])-1)
-                    p["row"].append(f"{ps[idx]:.2f}")
-                    if status in ('fail_low', 'fail_leak'): p["errs"].append(len(p["row"])-1)
-                # G
-                p["row"].append(f"0x{gs[ch]:06X}")
-                if vs[ch] > 50.0 and (gs[ch] & 0xFFFF00) != GAIN_EXPECTED:
-                    p["errs"].append(len(p["row"])-1)
+        # V
+        row.append(f"{v:.2f}")
+        # I & P for 3 relays
+        for r in range(3):
+            status = JigProtocol.row_status(mask, channel, r, cs[r], ps[r])
+            row.append(f"{cs[r]:.1f}")
+            if status in ('fail_low', 'fail_leak'): errs.append(len(row)-1)
+            row.append(f"{ps[r]:.2f}")
+            if status in ('fail_low', 'fail_leak'): errs.append(len(row)-1)
+        # G
+        row.append(f"0x{g:06X}")
+        if v > 50.0 and (g & 0xFFFF00) != GAIN_EXPECTED:
+            errs.append(len(row)-1)
 
-        return (parts[0]["row"], parts[1]["row"]), (parts[0]["errs"], parts[1]["errs"])
+        return row, errs
 
     # ── System Logs Tab ────────────────────────────
     def _build_syslog_tab(self):
@@ -440,6 +516,48 @@ class LumesJigApp(ctk.CTk):
         self._frame_lbl.configure(
             text=f"Sessions: {self._session_no}  |  Frames: {total_frames}")
 
+    def _load_mock_data(self):
+        """Generates a complete fake test session to verify UI."""
+        self._sys_log("Simulating mock test session...")
+        self._on_test_start()
+        
+        # 1. Simulate 5 data frames
+        import random
+        for i in range(12): # simulate 12 packets (3 per channel)
+            ch = i % 4
+            mock_pkt = {
+                "type": "ch_data",
+                "channel": ch,
+                "voltage": 220.5 + random.uniform(-1, 1),
+                "currents": [500.0 + random.uniform(-5, 5) for _ in range(3)],
+                "powers":   [110.0 + random.uniform(-2, 2) for _ in range(3)],
+                "gain":     0x333300,
+                "relay_mask": 0b111000111000
+            }
+            self._on_ch_data_frame(mock_pkt)
+            self.update()
+            time.sleep(0.1)
+
+        # 2. Simulate summary frame
+        mock_summary = {
+            "type":      "summary",
+            "zcd_ok":    [1, 1, 0, 1],
+            "calib_ok":  [1, 1, 1, 1],
+            "eeprom_ok": [1, 1, 1, 0],
+            "relay_ok":  [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+            "zcd_counts":[100, 101, 45, 99],
+            "k_u":       [1050, 1048, 1052, 1049],
+            "k_i":       [1010 + random.randint(0,20) for _ in range(12)],
+            "k_p":       [1020 + random.randint(0,20) for _ in range(12)],
+            "cnt_u":     [5, 5, 5, 5],
+            "cnt_i":     [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+        }
+        self._on_summary_frame(mock_summary)
+        
+        # 3. End session
+        self._on_test_end()
+        self._sys_log("Mock session complete (Check CALIBRATION tab).")
+
     # ──────────────────────────────────────────────
     # Packet Routing (called from serial thread → after() to main thread)
     # ──────────────────────────────────────────────
@@ -452,8 +570,10 @@ class LumesJigApp(ctk.CTk):
             elif cmd == JigProtocol.CMD_TEST_END:
                 self.after(0, self._on_test_end)
             # Do NOT write START/END to sys log
-        elif t == "data":
-            self.after(0, lambda p=pkt: self._on_data_frame(p))
+        elif t == "ch_data":
+            self.after(0, lambda p=pkt: self._on_ch_data_frame(p))
+        elif t == "summary":
+            self.after(0, lambda p=pkt: self._on_summary_frame(p))
 
     # ──────────────────────────────────────────────
     # Session lifecycle
@@ -467,7 +587,7 @@ class LumesJigApp(ctk.CTk):
         self._clear_log()
         self._tabs.set("SESSION LOG")
 
-    def _on_data_frame(self, pkt):
+    def _on_ch_data_frame(self, pkt):
         elapsed = time.time() - (self._session_start or time.time())
         if self._in_session:
             pkt["_ts"] = elapsed
@@ -475,6 +595,53 @@ class LumesJigApp(ctk.CTk):
             self._append_log_row(pkt, elapsed)
         self._update_live(pkt)
         self._update_frame_lbl()
+
+    def _on_summary_frame(self, pkt):
+        """Update the CALIBRATION tab with detailed results."""
+        self._tabs.set("CALIBRATION")
+        for ch in range(4):
+            card = self._summary_cards[ch]
+            
+            # ZCD, Calib Range, EEPROM
+            z_ok = pkt["zcd_ok"][ch] == 1
+            z_val = pkt.get("zcd_counts", [0,0,0,0])[ch]
+            c_ok = pkt["calib_ok"][ch] == 1
+            e_ok = pkt["eeprom_ok"][ch] == 1
+            
+            z_txt = f"{'PASS' if z_ok else 'FAIL'} ({z_val})"
+            card["checks"]["Zero Detect"].configure(text=z_txt, text_color="#00ff88" if z_ok else "#ff4444")
+            card["checks"]["Calibration Range"].configure(text="PASS" if c_ok else "FAIL", text_color="#00ff88" if c_ok else "#ff4444")
+            card["checks"]["EEPROM Write"].configure(text="PASS" if e_ok else "FAIL", text_color="#00ff88" if e_ok else "#ff4444")
+            
+            # Relays
+            all_r_ok = True
+            for r in range(3):
+                idx = ch * 3 + r
+                r_ok = pkt["relay_ok"][idx] == 1
+                if not r_ok: all_r_ok = False
+                card["relays"][r].configure(text="OK" if r_ok else "FAIL", text_color="#00ff88" if r_ok else "#ff4444")
+            
+            # Final Status
+            overall = z_ok and c_ok and e_ok and all_r_ok
+            card["header"].configure(text="[ PASS ]" if overall else "[ FAIL ]", text_color="#00ff88" if overall else "#ff4444")
+            
+            # Calibration Table (K-factors & Counts)
+            k_box = card["k_box"]
+            k_box.configure(state="normal")
+            k_box.delete("1.0", "end")
+            
+            k_box.insert("end", f"K-Voltage: {pkt['k_u'][ch]:<8} (Count: {pkt['cnt_u'][ch]})\n")
+            line_i = "K-Current: "
+            line_p = "K-Power:   "
+            line_c = "Counts I:  "
+            for r in range(3):
+                idx = ch * 3 + r
+                line_i += f"{REL_NAMES[r]}:{pkt['k_i'][idx]:<6} "
+                line_p += f"{REL_NAMES[r]}:{pkt['k_p'][idx]:<6} "
+                line_c += f"{REL_NAMES[r]}:{pkt['cnt_i'][idx]:<6} "
+            
+            k_box.insert("end", line_i + "\n" + line_p + "\n" + line_c)
+            k_box.configure(state="disabled")
 
     def _on_test_end(self):
         self._in_session = False
@@ -498,39 +665,34 @@ class LumesJigApp(ctk.CTk):
     # Live Tab
     # ──────────────────────────────────────────────
     def _update_live(self, pkt):
-        vs = pkt["voltages"]; cs = pkt["currents"]
-        ps = pkt["powers"];   gs = pkt["gains"]
+        ch = pkt["channel"]
+        v = pkt["voltage"]; cs = pkt["currents"]
+        ps = pkt["powers"];  g = pkt["gain"]
         mask = pkt.get("relay_mask", 0)
         
-        for ch in range(4):
-            rows = self._live_cards[ch]
+        rows = self._live_cards[ch]
+        
+        # Smart Gain coloring
+        gain_ok = (v < 50.0) or ((g & 0xFFFF00) == GAIN_EXPECTED)
+        g_text  = f"GAIN: 0x{g:06X}" + ("" if gain_ok else " ⚠")
+        g_color = "#00cc88" if gain_ok else "#ff4444"
+        
+        rows[0]["v"].configure(text=f"{v:.2f} V")
+        rows[0]["g"].configure(text=g_text, text_color=g_color)
+        
+        for r in range(3):
+            status = JigProtocol.row_status(mask, ch, r, cs[r], ps[r])
             
-            # Smart Gain coloring: Only red if channel has voltage (>50V)
-            gain_ok = (vs[ch] < 50.0) or ((gs[ch] & 0xFFFF00) == GAIN_EXPECTED)
-            g_text  = f"GAIN: 0x{gs[ch]:06X}" + ("" if gain_ok else " ⚠")
-            g_color = "#00cc88" if gain_ok else "#ff4444"
+            txt_color = "#ffffff"
+            if status in ('fail_low', 'fail_leak'):
+                txt_color = "#ff4444"
+            elif status == 'ok':
+                txt_color = "#00ff88"
+            else:
+                txt_color = "#777777"
             
-            rows[0]["v"].configure(text=f"{vs[ch]:.2f} V")
-            rows[0]["g"].configure(text=g_text, text_color=g_color)
-            
-            for r in range(3):
-                idx = ch * 3 + r
-                status = JigProtocol.row_status(mask, ch, r, cs[idx], ps[idx])
-                
-                # Color logic:
-                # - 'fail_low' / 'fail_leak' -> Red
-                # - 'ok' (Relay ON and good) -> Green
-                # - 'off' (Relay OFF and no leakage) -> Normal (Grey/White)
-                txt_color = "#ffffff"
-                if status in ('fail_low', 'fail_leak'):
-                    txt_color = "#ff4444"
-                elif status == 'ok':
-                    txt_color = "#00ff88"
-                else:
-                    txt_color = "#777777"
-                
-                rows[r]["i"].configure(text=f"{cs[idx]:.1f} mA", text_color=txt_color)
-                rows[r]["p"].configure(text=f"{ps[idx]:.2f} W",   text_color=txt_color)
+            rows[r]["i"].configure(text=f"{cs[r]:.1f} mA", text_color=txt_color)
+            rows[r]["p"].configure(text=f"{ps[r]:.2f} W",   text_color=txt_color)
 
     # ──────────────────────────────────────────────
     # Session Log Tab
@@ -538,14 +700,13 @@ class LumesJigApp(ctk.CTk):
     def _append_log_row(self, pkt, ts):
         n = len(self._session_frames)
         pkt["ts_offset"] = ts
-        
-        rows, errs = self._format_frame_row(pkt, n, ts)
-        self._log_table_up.append_row(rows[0], errs[0])
-        self._log_table_dn.append_row(rows[1], errs[1])
+        ch = pkt["channel"]
+        row, errs = self._format_frame_row(pkt, n, ts, ch)
+        self._log_tables[ch].append_row(row, errs)
 
     def _clear_log(self):
-        self._log_table_up.clear()
-        self._log_table_dn.clear()
+        for tbl in self._log_tables:
+            tbl.clear()
 
     # ──────────────────────────────────────────────
     # Test History Push
@@ -559,8 +720,10 @@ class LumesJigApp(ctk.CTk):
         # Calculate Gain Summary for master list
         err_count = 0
         for f in frames:
-            for ch in range(4):
-                if f["voltages"][ch] > 50.0 and (f["gains"][ch] & 0xFFFF00) != GAIN_EXPECTED:
+            if f.get("type") == "ch_data":
+                v = f["voltage"]
+                g = f["gain"]
+                if v > 50.0 and (g & 0xFFFF00) != GAIN_EXPECTED:
                     err_count += 1
         
         status = "✅ OK" if err_count == 0 else f"⚠ {err_count} RESETS"
@@ -569,32 +732,31 @@ class LumesJigApp(ctk.CTk):
 
     def _clear_results(self):
         self._hist_list.delete(*self._hist_list.get_children())
-        self._hist_table_up.clear()
-        self._hist_table_dn.clear()
+        for tbl in self._hist_tables:
+            tbl.clear()
         self._all_sessions.clear()
         self._session_no = 0
         self._update_frame_lbl()
         self._hist_detail_lbl.configure(text="SELECT A SESSION TO VIEW DETAILS", text_color="#777")
         
     def _re_render_logs(self, frames):
-        """Full re-render of both log tables (Live view)."""
-        self._log_table_up.clear()
-        self._log_table_dn.clear()
+        """Full re-render of all log tables (Live view)."""
+        self._clear_log()
         for i, pkt in enumerate(frames):
             ts = pkt.get("ts_offset", 0)
-            rows, errs = self._format_frame_row(pkt, i, ts)
-            self._log_table_up.append_row(rows[0], errs[0])
-            self._log_table_dn.append_row(rows[1], errs[1])
+            ch = pkt["channel"]
+            row, errs = self._format_frame_row(pkt, i, ts, ch)
+            self._log_tables[ch].append_row(row, errs)
 
     def _on_zoom_v(self, val):
         sz = int(float(val))
-        for tbl in [self._log_table_up, self._log_table_dn, self._hist_table_up, self._hist_table_dn]:
+        for tbl in self._log_tables + self._hist_tables:
             tbl.set_zoom(font_size=sz)
 
     def _on_zoom_h(self, val):
         w = int(float(val))
         re_render = False
-        for tbl in [self._log_table_up, self._log_table_dn, self._hist_table_up, self._hist_table_dn]:
+        for tbl in self._log_tables + self._hist_tables:
             if tbl.set_zoom(col_width=w):
                 re_render = True
         

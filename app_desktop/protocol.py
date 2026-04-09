@@ -6,7 +6,10 @@ class JigProtocol:
     # Commands from firmware → PC
     CMD_TEST_START  = 0xA0
     CMD_TEST_END    = 0xA1
-    CMD_DATA_FRAME  = 0x10
+    CMD_SUMMARY_FRAME  = 0xA2
+    
+    CMD_CH_DATA_START  = 0x11
+    CMD_CH_DATA_END    = 0x14
 
     # Thresholds (same as State 5 in process.cpp)
     I_ON_MIN   = 100.0  # mA: relay ON must exceed this
@@ -31,34 +34,71 @@ class JigProtocol:
                 return None
             return {"type": "event", "cmd": cmd}
 
-        # 77-byte data frame
-        if cmd == JigProtocol.CMD_DATA_FRAME:
-            if len(raw_bytes) < 77:
+        # 24-byte single channel data frame (0x11 - 0x14)
+        if JigProtocol.CMD_CH_DATA_START <= cmd <= JigProtocol.CMD_CH_DATA_END:
+            if len(raw_bytes) < 24:
                 return None
-            checksum = raw_bytes[76]
-            expected_cs = sum(raw_bytes[:76]) & 0xFF
+            checksum = raw_bytes[22]
+            expected_cs = sum(raw_bytes[:22]) & 0xFF
             if checksum != expected_cs:
                 return None
 
-            # Payload layout:
-            # [2:10]  4×Voltage  uint16 ×100  → 0.01V
-            # [10:34] 12×Current uint16 ×10   → 0.1mA
-            # [34:58] 12×Power   uint16 ×100  → 0.01W
-            # [58:74] 4×Gain     uint32
-            # [74:76] relay_mask uint16 (bit0=relay0 … bit11=relay11)
-            voltages   = struct.unpack(">HHHH",           raw_bytes[2:10])
-            currents   = struct.unpack(">HHHHHHHHHHHH",   raw_bytes[10:34])
-            powers     = struct.unpack(">HHHHHHHHHHHH",   raw_bytes[34:58])
-            gains      = struct.unpack(">IIII",           raw_bytes[58:74])
-            relay_mask = struct.unpack(">H",              raw_bytes[74:76])[0]
+            channel_idx = cmd - JigProtocol.CMD_CH_DATA_START # 0-3
+            
+            # Payload layout: [2:4] V, [4:10] 3xI, [10:16] 3xP, [16:20] G, [20:22] Mask
+            v_raw    = struct.unpack(">H",    raw_bytes[2:4])[0]
+            currents = struct.unpack(">HHH",  raw_bytes[4:10])
+            powers   = struct.unpack(">HHH",  raw_bytes[10:16])
+            gain     = struct.unpack(">I",    raw_bytes[16:20])[0]
+            mask     = struct.unpack(">H",    raw_bytes[20:22])[0]
 
             return {
-                "type":       "data",
-                "voltages":   [v / 100.0  for v in voltages],   # 0.01V
-                "currents":   [i / 10.0   for i in currents],   # 0.1mA
-                "powers":     [p / 100.0  for p in powers],     # 0.01W
-                "gains":      list(gains),
-                "relay_mask": relay_mask,  # bitmask: bit N = relay N
+                "type":       "ch_data",
+                "channel":    channel_idx,
+                "voltage":    v_raw / 100.0,
+                "currents":   [i / 10.0  for i in currents],
+                "powers":     [p / 100.0 for p in powers],
+                "gain":       gain,
+                "relay_mask": mask
+            }
+
+        # 108-byte summary frame
+        if cmd == JigProtocol.CMD_SUMMARY_FRAME:
+            if len(raw_bytes) < 108:
+                return None
+            checksum = raw_bytes[107]
+            expected_cs = sum(raw_bytes[:107]) & 0xFF
+            if checksum != expected_cs:
+                return None
+
+            # Unpack results
+            zcd_ok     = list(raw_bytes[2:6])
+            calib_ok   = list(raw_bytes[6:10])
+            eeprom_ok  = list(raw_bytes[10:14])
+            relay_ok   = list(raw_bytes[14:26])
+            
+            # ZCD Counts (New)
+            zcd_counts = struct.unpack(">HHHH",           raw_bytes[26:34])
+            
+            k_u        = struct.unpack(">HHHH",           raw_bytes[34:42])
+            k_i        = struct.unpack(">HHHHHHHHHHHH",   raw_bytes[42:66])
+            k_p        = struct.unpack(">HHHHHHHHHHHH",   raw_bytes[66:90])
+            
+            cnt_u      = list(raw_bytes[90:94])
+            cnt_i      = list(raw_bytes[94:106])
+
+            return {
+                "type":       "summary",
+                "zcd_ok":     zcd_ok,
+                "calib_ok":   calib_ok,
+                "eeprom_ok":  eeprom_ok,
+                "relay_ok":   relay_ok,
+                "zcd_counts": list(zcd_counts),
+                "k_u":        list(k_u),
+                "k_i":        list(k_i),
+                "k_p":        list(k_p),
+                "cnt_u":      cnt_u,
+                "cnt_i":      cnt_i
             }
 
         return None
