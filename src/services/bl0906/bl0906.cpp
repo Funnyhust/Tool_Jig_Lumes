@@ -1016,10 +1016,13 @@ static void bl0906_read_register(uint8_t address) {
  * @retval  None
  */
 void bl0906_send_get_current(void) {
+  bl0906_proc();
   bl0906_read_register(
       I1_RMS); // Không cần delay vì đã có trong bl0906_read_register()
+  bl0906_proc();
   bl0906_read_register(
       I2_RMS); // Không cần delay vì đã có trong bl0906_read_register()
+  bl0906_proc();
   bl0906_read_register(
       I3_RMS); // Không cần delay vì đã có trong bl0906_read_register()
 }
@@ -1039,8 +1042,11 @@ void bl0906_get_voltage(void) { bl0906_read_register(V_RMS); }
  * @retval  None
  */
 void bl0906_get_active_power(void) {
+  bl0906_proc();
   bl0906_read_register(WATT_1);
+  bl0906_proc();
   bl0906_read_register(WATT_2);
+  bl0906_proc();
   bl0906_read_register(
       WATT_3); // Không cần delay vì đã có trong bl0906_read_register()
 }

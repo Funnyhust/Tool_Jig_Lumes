@@ -364,7 +364,9 @@ static void read_bl0906_channel(int channel, UartService *uart) {
 
   // Đọc giá trị
   bl0906_send_get_current();
+  bl0906_proc();
   bl0906_get_voltage();
+  bl0906_proc();
   bl0906_get_active_power();
 
   // Lưu giá trị vào mảng của kênh này ngay sau khi đọc giá trị đơn vị uV, pA,
@@ -518,6 +520,11 @@ static void broadcast_data_frame(void) {
 //===========================================//
 
 void start_process(void) {
+  
+    relayService.turnOnAll();
+    delayWithBlink(400);
+    relayService.turnOffAll();
+
   // Gửi sự kiện START cho App Desktop
   send_test_event(LOG_CMD_START);
 
@@ -571,6 +578,7 @@ void start_process(void) {
     PROCESS_UART_DEBUG_PRINTLN(ch + 1);
     for(int j=0; j<3; j++) {
       relayService.setRelayState(ch * 3 + j, true);
+      delayWithBlink(400);
     }
     //==================STEP 2: PREPARE AND STABILIZE==================//
     // Set UART and channel BEFORE delay to allow background calibration
@@ -634,8 +642,8 @@ void start_process(void) {
     PROCESS_UART_DEBUG_PRINTLN(ch + 1);
     for(int j=0; j<3; j++) {
       relayService.setRelayState(ch * 3 + j, false);
+      delayWithBlink(200);
     }
-    delayWithBlink(100);
   }
   
   //==================STATE 3: CALIBRATE ALL CHANNELS==================//
@@ -791,8 +799,12 @@ void start_process(void) {
                relayService.setRelayState(i * 3 + j, true);
            }
       }
-      delay(1000); // Stabilize load
-
+    uint32_t wait_start_2 = millis();
+    
+    while (millis() - wait_start_2 < 1000) {
+        bl0906_proc();
+        delayWithBlink(100); 
+    }
       // Bộ đếm số lần fail cho từng (channel, relay).
       // Chỉ mark FAIL khi fail_count == NUM_RELAY_MEASUREMENTS (tất cả lần đều fail).
       uint8_t fail_count[4][3] = {
