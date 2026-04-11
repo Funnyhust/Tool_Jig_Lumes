@@ -1,13 +1,11 @@
 /*******************************************************************************
- *				 _ _                                             _ _
-				|   |                                           (_ _)
-				|   |        _ _     _ _   _ _ _ _ _ _ _ _ _ _   _ _
-				|   |       |   |   |   | |    _ _     _ _    | |   |
-				|   |       |   |   |   | |   |   |   |   |   | |   |
-				|   |       |   |   |   | |   |   |   |   |   | |   |
-				|   |_ _ _  |   |_ _|   | |   |   |   |   |   | |   |
-				|_ _ _ _ _| |_ _ _ _ _ _| |_ _|   |_ _|   |_ _| |_ _|
-								(C)2022 Lumi
+ *				 _ _ _ _ |   | (_ _) |   |        _ _     _ _ _
+ _ _ _ _ _ _ _ _ _   _ _ |   |       |   |   |   | |    _ _     _ _    | |   |
+                                |   |       |   |   |   | |   |   |   |   |   |
+ |   | |   |       |   |   |   | |   |   |   |   |   | |   | |   |_ _ _  |   |_
+ _|   | |   |   |   |   |   | |   |
+                                |_ _ _ _ _| |_ _ _ _ _ _| |_ _|   |_ _|   |_ _|
+ |_ _| (C)2022 Lumi
  * Copyright (c) 2022
  * Lumi, JSC.
  * All Rights Reserved
@@ -29,11 +27,15 @@
 #include "bl0906.h"
 #include "../../config.h"
 #include "../uart/uart_service.h"
+#include "config.h"
 #include "utilities.h"
 #include <Arduino.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+
+extern void delayWithBlink(uint32_t ms);
+
 // Debug macros - in ra Serial5
 
 #if BL0906_DBG_EN
@@ -108,6 +110,11 @@ typeBl0906_handle_update_energy pvBl0906_handle_update_energy = NULL;
 static UartService *p_uart_service = NULL;
 static UartService *p_debug_uart = NULL; // UART để log debug
 static uint8_t current_channel = 0;      // Kênh hiện tại (0-3)
+static bl0906_error_callback_t p_error_callback = NULL;
+
+void bl0906_set_error_callback(bl0906_error_callback_t callback) {
+  p_error_callback = callback;
+}
 
 /******************************************************************************/
 /*                              PRIVATE DATA                                  */
@@ -135,7 +142,8 @@ static gain_par_t gain_par[4] = { // Mảng gain_par cho 4 kênh
     {.value = 0, .set_gain_st_t_ms = 0}};
 
 static float get_active_gain_i(uint8_t channel) {
-  if (channel >= 4) return 1.0f;
+  if (channel >= 4)
+    return 1.0f;
   if ((gain_par[channel].value & 0xFFFF00) == GAIN_1_DEFAULT_VALUE) {
     return 16.0f;
   }
@@ -688,8 +696,9 @@ static void bl0906_set_gain_proc(void) {
   if ((gain_par[current_channel].value & 0xFFFF00) != GAIN_1_DEFAULT_VALUE) {
     DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
     DBG_BL0906_SEND_INT(current_channel);
-    DBG_BL0906_SEND_STR_INFO(" Gain not equal to default value (x16). Attempting to set...");
-    
+    DBG_BL0906_SEND_STR_INFO(
+        " Gain not equal to default value (x16). Attempting to set...");
+
     // Kiểm tra UART trước khi set gain
     if (p_uart_service == NULL || p_uart_service->getSerial() == NULL) {
       DBG_BL0906_SEND_STR_ERROR("\nBL0906: Channel ");
@@ -719,7 +728,8 @@ static void bl0906_set_gain_proc(void) {
       bl0906_read_register(GAIN_1);
 
       // Kiểm tra xem gain đã được set đúng chưa
-      if ((gain_par[current_channel].value & 0xFFFF00) == GAIN_1_DEFAULT_VALUE) {
+      if ((gain_par[current_channel].value & 0xFFFF00) ==
+          GAIN_1_DEFAULT_VALUE) {
         set_success = true;
         DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
         DBG_BL0906_SEND_INT(current_channel);
@@ -740,7 +750,8 @@ static void bl0906_set_gain_proc(void) {
       DBG_BL0906_SEND_INT(current_channel);
       DBG_BL0906_SEND_STR_ERROR(" Set gain FAILED after ");
       DBG_BL0906_SEND_INT(MAX_RETRY);
-      DBG_BL0906_SEND_STR_ERROR(" attempts! Fallback to Gain = x1 will be used.");
+      DBG_BL0906_SEND_STR_ERROR(
+          " attempts! Fallback to Gain = x1 will be used.");
     }
   } else {
     DBG_BL0906_SEND_STR_INFO("\nBL0906: Channel ");
@@ -749,9 +760,7 @@ static void bl0906_set_gain_proc(void) {
   }
 }
 
-void bl0906_proc(void) {
-  bl0906_set_gain_proc();
-}
+void bl0906_proc(void) { bl0906_set_gain_proc(); }
 /**
  * @func    _culcCheckSum
  * @brief
@@ -844,7 +853,7 @@ static void bl0906_read_register(uint8_t address) {
   // Đợi một chút để thiết bị có thời gian phản hồi
   // Theo tài liệu: thời gian từ khi MCU gửi xong đến khi BL0906 bắt đầu gửi
   // byte đầu tiên là 120µs Để an toàn, delay 1ms (đủ cho 120µs + margin)
-  delay(1);
+  delayWithBlink(1);
 
   // Đợi cho đến khi có đủ bytes trong buffer hoặc timeout
   // Theo tài liệu: frame timeout tối đa là khoảng 16ms
@@ -863,6 +872,9 @@ static void bl0906_read_register(uint8_t address) {
       DBG_BL0906_SEND_STR_ERROR(" bytes, waited ");
       DBG_Bl0906_SEND_DWORD(millis() - start_time);
       DBG_BL0906_SEND_STR_ERROR(" ms)");
+      if (p_error_callback != NULL) {
+        p_error_callback(current_channel, BL0906_ERR_TIMEOUT);
+      }
       // Log bất kỳ dữ liệu nào đã nhận được
       if (available_bytes > 0) {
         uint8_t partial[10];
@@ -877,7 +889,8 @@ static void bl0906_read_register(uint8_t address) {
       }
       return;
     }
-    delay(1); // Giảm xuống 1ms để check nhanh hơn (theo tài liệu chỉ cần 120µs)
+    delayWithBlink(
+        1); // Giảm xuống 1ms để check nhanh hơn (theo tài liệu chỉ cần 120µs)
   }
 
   // Đọc phản hồi (4 bytes: 3 bytes data + 1 byte checksum)
@@ -921,6 +934,9 @@ static void bl0906_read_register(uint8_t address) {
     DBG_BL0906_SEND_STR_ERROR(" recv=");
     DBG_BL0906_SEND_BYTE(rx_data[BL0906_RX_LEN - 1]);
     DBG_BL0906_SEND_STR_ERROR(")");
+    if (p_error_callback != NULL) {
+      p_error_callback(current_channel, BL0906_ERR_CHECKSUM);
+    }
     return;
   }
 
@@ -1103,7 +1119,7 @@ bool bl0906_reset(void) {
     DBG_BL0906_SEND_STR("Can not write SOFT_RESET register.");
     return false;
   }
-  delay(500);
+  delayWithBlink(500);
   return true;
 }
 
@@ -1188,7 +1204,7 @@ void bl0906_reset_measurements(void) {
   memset(&measurement_values[current_channel], 0, sizeof(measurement_value_t));
   // Reset các flag OK về false
   measurement_values[current_channel].voltage_ok = false;
-  for(int k=0; k<3; k++) {
+  for (int k = 0; k < 3; k++) {
     measurement_values[current_channel].current_ok[k] = false;
     measurement_values[current_channel].power_ok[k] = false;
   }
@@ -1239,6 +1255,10 @@ bool bl0906_read_register_sync(uint8_t address, uint8_t *rx_data,
   uint32_t start_time = clock_time_ms();
   while (sync_read_waiting) {
     if (clock_time_exceed_ms(start_time, timeout_ms)) {
+      DBG_BL0906_SEND_STR_ERROR("\nBL0906: RECEIVE TIMEOUT!");
+      if (p_error_callback != NULL) {
+        p_error_callback(current_channel, BL0906_ERR_TIMEOUT);
+      }
       sync_read_waiting = false;
       return false; // Timeout
     }

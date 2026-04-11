@@ -10,6 +10,8 @@ class JigProtocol:
     
     CMD_CH_DATA_START  = 0x11
     CMD_CH_DATA_END    = 0x14
+    CMD_COMM_ERROR     = 0xB0
+    CMD_EEPROM_ERROR   = 0xB1
 
     # Thresholds (same as State 5 in process.cpp)
     I_ON_MIN   = 100.0  # mA: relay ON must exceed this
@@ -27,17 +29,32 @@ class JigProtocol:
             return None
 
         # 5-byte event packets: START / END
-        if cmd in (JigProtocol.CMD_TEST_START, JigProtocol.CMD_TEST_END):
+        if cmd in (JigProtocol.CMD_TEST_START, JigProtocol.CMD_TEST_END, JigProtocol.CMD_COMM_ERROR, JigProtocol.CMD_EEPROM_ERROR):
             checksum = raw_bytes[4]
             expected_cs = sum(raw_bytes[:4]) & 0xFF
             if checksum != expected_cs:
                 return None
+            
+            if cmd == JigProtocol.CMD_COMM_ERROR:
+                return {
+                    "type": "error", 
+                    "channel": raw_bytes[2], 
+                    "err": raw_bytes[3]
+                }
+            if cmd == JigProtocol.CMD_EEPROM_ERROR:
+                return {
+                    "type": "eeprom_error",
+                    "channel": raw_bytes[2],
+                    "status": raw_bytes[3]
+                }
             return {"type": "event", "cmd": cmd}
 
         # 24-byte single channel data frame (0x11 - 0x14)
         if JigProtocol.CMD_CH_DATA_START <= cmd <= JigProtocol.CMD_CH_DATA_END:
             if len(raw_bytes) < 24:
                 return None
+            
+            # Checksum is at index 22 in FW (sum of bytes 0-21)
             checksum = raw_bytes[22]
             expected_cs = sum(raw_bytes[:22]) & 0xFF
             if checksum != expected_cs:
@@ -45,12 +62,13 @@ class JigProtocol:
 
             channel_idx = cmd - JigProtocol.CMD_CH_DATA_START # 0-3
             
-            # Payload layout: [2:4] V, [4:10] 3xI, [10:16] 3xP, [16:20] G, [20:22] Mask
+            # Payload layout: [2:4] V, [4:10] 3xI, [10:16] 3xP, [16:20] G, [20:22] Mask, 22: CS, 23: Stat
             v_raw    = struct.unpack(">H",    raw_bytes[2:4])[0]
             currents = struct.unpack(">HHH",  raw_bytes[4:10])
             powers   = struct.unpack(">HHH",  raw_bytes[10:16])
             gain     = struct.unpack(">I",    raw_bytes[16:20])[0]
             mask     = struct.unpack(">H",    raw_bytes[20:22])[0]
+            comm_err = raw_bytes[23]
 
             return {
                 "type":       "ch_data",
@@ -59,7 +77,8 @@ class JigProtocol:
                 "currents":   [i / 10.0  for i in currents],
                 "powers":     [p / 100.0 for p in powers],
                 "gain":       gain,
-                "relay_mask": mask
+                "relay_mask": mask,
+                "comm_err":   comm_err
             }
 
         # 108-byte summary frame

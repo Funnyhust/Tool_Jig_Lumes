@@ -50,6 +50,8 @@ void uart_init(void);
 void process_init(void);
 void start_process(void);
 bool is_fail_once();
+void process_handle_blinks(void);
+void process_stop_all(void);
 void debug_init(void);
 
 #endif

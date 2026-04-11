@@ -169,7 +169,16 @@ typedef void (*typeBl0906_handle_update_energy)(m_type_enum type, float value);
 /*                             EXPORT FUNCTIONS                               */
 /******************************************************************************/
 
+typedef enum {
+  BL0906_ERR_NONE = 0,
+  BL0906_ERR_TIMEOUT = 1,
+  BL0906_ERR_CHECKSUM = 2
+} bl0906_error_t;
+
+typedef void (*bl0906_error_callback_t)(uint8_t channel, bl0906_error_t error);
+
 // ========== Core Functions ==========
+void bl0906_set_error_callback(bl0906_error_callback_t callback);
 void bl0906_init(typeBl0906_handle_update_energy func,
                  UartService *uart_service);
 void bl0906_set_uart(

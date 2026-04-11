@@ -30,13 +30,11 @@ GAIN_EXPECTED = 0x333300   # x16 correct
 # Custom Table Widget (Per-Cell Highlighting Support)
 # ─────────────────────────────────────────────────────────────────────────────
 class JigTable(ctk.CTkFrame):
-    """A high-performance text-based table with dual-axis zoom (Font & Width)."""
-    def __init__(self, master, columns, title="", **kwargs):
-        super().__init__(master, fg_color="transparent", **kwargs)
+    def __init__(self, master, columns, title=None, col_w=10, font_size=12):
+        super().__init__(master, fg_color="#0a0a12", corner_radius=0)
         self.columns = columns
-        self.col_w   = 8  
-        self.font_size = 11
-        self._frames_ref = [] # Local ref for re-rendering
+        self.col_w   = col_w
+        self.font_size = font_size
         
         if title:
             ctk.CTkLabel(self, text=title, font=ctk.CTkFont(size=11, weight="bold"), text_color="#777").pack(pady=(2,0))
@@ -50,8 +48,10 @@ class JigTable(ctk.CTkFrame):
         self._write_header()
 
     def _update_tag_config(self):
-        self.txt.tag_config("fail", foreground="#ff4444")
-        self.txt.tag_config("hdr",  foreground="#2b9ede")
+        self.txt.tag_config("fail",     foreground="#FF0000") # Đỏ Neon (Sản phẩm lỗi)
+        self.txt.tag_config("hdr",      foreground="#2B9EDE") # Xanh dương (Tiêu đề)
+        self.txt.tag_config("timeout",  foreground="#FF8C00") # Cam cháy (Timeout)
+        self.txt.tag_config("checksum", foreground="#00FFFF") # Xanh lơ Neon (Checksum)
 
     def _write_header(self):
         self.txt.configure(state="normal")
@@ -77,9 +77,11 @@ class JigTable(ctk.CTkFrame):
 
         return re_render_needed
 
-    def append_row(self, values, highlight_indices=None):
+    def append_row(self, values, highlight_indices=None, timeout_indices=None, checksum_indices=None):
         self.txt.configure(state="normal")
         if highlight_indices is None: highlight_indices = []
+        if timeout_indices is None:   timeout_indices = []
+        if checksum_indices is None:  checksum_indices = []
 
         pos = self.txt.index("end-1c")
         line_no = pos.split(".")[0]
@@ -105,6 +107,16 @@ class JigTable(ctk.CTkFrame):
             if col_idx < len(cell_positions):
                 sp, ep = cell_positions[col_idx]
                 self.txt.tag_add("fail", f"{line_no}.{sp}", f"{line_no}.{ep}")
+
+        for col_idx in timeout_indices:
+            if col_idx < len(cell_positions):
+                sp, ep = cell_positions[col_idx]
+                self.txt.tag_add("timeout", f"{line_no}.{sp}", f"{line_no}.{ep}")
+
+        for col_idx in checksum_indices:
+            if col_idx < len(cell_positions):
+                sp, ep = cell_positions[col_idx]
+                self.txt.tag_add("checksum", f"{line_no}.{sp}", f"{line_no}.{ep}")
 
         self.txt.see("end")
         self.txt.configure(state="disabled")
@@ -141,7 +153,8 @@ class LumesJigApp(ctk.CTk):
         self._in_session       = False
         self._session_start    = 0.0
         self._session_no       = 0       # auto-incremented per session
-        self._all_sessions     = []      # list of dicts {frames, timestamp, duration}
+        self._all_sessions     = []      # list of dicts {frames, summary, timestamp, duration}
+        self._last_summary     = None    # Track the latest summary during a session
 
         self.serial_manager = SerialManager(self._on_packet, self._sys_log)
         self._build_ui()
@@ -261,13 +274,22 @@ class LumesJigApp(ctk.CTk):
             col_l.pack(side="left", fill="both", expand=True)
             
             checks = {}
-            for i, label_txt in enumerate(["Zero Detect", "Calibration Range", "EEPROM Write"]):
+            for i, label_txt in enumerate(["Zero Detect", "EEPROM Write"]):
                 row = ctk.CTkFrame(col_l, fg_color="transparent")
                 row.pack(fill="x", pady=2)
                 ctk.CTkLabel(row, text=f"• {label_txt}:", font=ctk.CTkFont(size=11), text_color="#aaa").pack(side="left")
                 val = ctk.CTkLabel(row, text="---", font=ctk.CTkFont(size=11, weight="bold"), text_color="#444")
                 val.pack(side="right", padx=10)
                 checks[label_txt] = val
+            
+            # Separate Calib labels for A, B, C
+            for lbl in ["Calib Relay A", "Calib Relay B", "Calib Relay C"]:
+                row = ctk.CTkFrame(col_l, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text=f"• {lbl}:", font=ctk.CTkFont(size=11), text_color="#aaa").pack(side="left")
+                val = ctk.CTkLabel(row, text="---", font=ctk.CTkFont(size=11, weight="bold"), text_color="#444")
+                val.pack(side="right", padx=10)
+                checks[lbl] = val
                 
             # Right side: Relay mechanical checks
             col_r = ctk.CTkFrame(body, fg_color="transparent")
@@ -415,6 +437,12 @@ class LumesJigApp(ctk.CTk):
         
         self._hist_tables = []
         cols = ("Frm#", "T(s)", "Voltage", "IA(mA)", "PA(W)", "IB(mA)", "PB(W)", "IC(mA)", "PC(W)", "Gain")
+        
+        # Add Summary tab for history
+        sum_t = self._hist_tabs.add("SUMMARY")
+        self._hist_summary_box = ctk.CTkTextbox(sum_t, fg_color="#0a0a12", font=ctk.CTkFont(family="Consolas", size=12))
+        self._hist_summary_box.pack(fill="both", expand=True)
+
         for ch in range(4):
             t = self._hist_tabs.add(f"CH {ch+1}")
             tbl = JigTable(t, cols)
@@ -422,26 +450,68 @@ class LumesJigApp(ctk.CTk):
             self._hist_tables.append(tbl)
 
     def _on_history_select(self, _e):
-        sel = self._hist_list.selection()
-        if not sel: return
-        
-        selected_item = self._hist_list.item(sel[0])
-        # Values[0] is the 1-based ID
-        idx = int(selected_item["values"][0]) - 1
-        if idx < 0 or idx >= len(self._all_sessions): return
+        try:
+            sel = self._hist_list.selection()
+            if not sel: return
+            
+            selected_item = self._hist_list.item(sel[0])
+            # Values[0] is the 1-based ID
+            idx = int(selected_item["values"][0]) - 1
+            if idx < 0 or idx >= len(self._all_sessions): return
 
-        session = self._all_sessions[idx]
-        self._hist_detail_lbl.configure(text=f"DETAILS: SESSION #{idx+1:03d} ({session['timestamp']})", text_color="#aaccff")
-        
-        # Clear & Repopulate detail tables
-        for tbl in self._hist_tables:
-            tbl.clear()
+            session = self._all_sessions[idx]
+            self._hist_detail_lbl.configure(text=f"DETAILS: SESSION #{idx+1:03d} ({session['timestamp']})", text_color="#aaccff")
+            
+            # Clear & Repopulate detail tables
+            for tbl in self._hist_tables:
+                tbl.clear()
+            
+            self._hist_summary_box.configure(state="normal")
+            self._hist_summary_box.delete("1.0", "end")
 
-        for i, frame in enumerate(session['frames']):
-            ts = frame.get("ts_offset", 0)
-            ch = frame["channel"]
-            row, errs = self._format_frame_row(frame, i, ts, ch)
-            self._hist_tables[ch].append_row(row, errs)
+            pkt = session.get("summary")
+            if pkt:
+                self._hist_summary_box.insert("end", f"--- CALIBRATION SUMMARY (SESSION #{idx+1:03d}) ---\n\n")
+                for ch in range(4):
+                    z_ok = "PASS" if pkt.get("zcd_ok", [0]*4)[ch] == 1 else "FAIL"
+                    e_ok = "PASS" if pkt.get("eeprom_ok", [0]*4)[ch] == 1 else "FAIL"
+                    z_val = pkt.get("zcd_counts", [0]*4)[ch]
+                    
+                    self._hist_summary_box.insert("end", f"CHANNEL {ch+1}:\n")
+                    self._hist_summary_box.insert("end", f"  > Zero Detect : {z_ok} (Count: {z_val})\n")
+                    self._hist_summary_box.insert("end", f"  > EEPROM Write: {e_ok}\n")
+                    
+                    kus = pkt.get('k_u', [1000]*4)
+                    ku = kus[ch]
+                    v_st = "OK" if (850 <= ku <= 1150) else "ERR"
+                    self._hist_summary_box.insert("end", f"  > K-Voltage   : {ku:<5} ({v_st})\n")
+                    
+                    ki_list = pkt.get('k_i', [1000]*12)
+                    kp_list = pkt.get('k_p', [1000]*12)
+                    r_oks   = pkt.get('relay_ok', [0]*12)
+
+                    for r in range(3):
+                        ridx = ch * 3 + r
+                        ki = ki_list[ridx]
+                        kp = kp_list[ridx]
+                        i_st = "OK" if (850 <= ki <= 1150) else "ERR"
+                        p_st = "OK" if (850 <= kp <= 1150) else "ERR"
+                        r_ok = "OK" if r_oks[ridx] == 1 else "FAIL"
+                        self._hist_summary_box.insert("end", f"  > Relay {REL_NAMES[r]}: {r_ok} | K-I: {ki:<5}({i_st}), K-P: {kp:<5}({p_st})\n")
+                    self._hist_summary_box.insert("end", "-"*50 + "\n")
+            else:
+                self._hist_summary_box.insert("end", "No calibration summary available for this session.")
+            
+            self._hist_summary_box.configure(state="disabled")
+
+            for i, frame in enumerate(session.get('frames', [])):
+                ts = frame.get("ts_offset", 0)
+                ch = frame.get("channel", 0)
+                row, errs, touts, csums = self._format_frame_row(frame, i, ts, ch)
+                if ch < len(self._hist_tables):
+                    self._hist_tables[ch].append_row(row, errs, touts, csums)
+        except Exception as e:
+            self._sys_log(f"HISTORY SELECT ERROR: {e}")
 
     def _format_frame_row(self, pkt, index, ts, channel):
         v = pkt["voltage"]; cs = pkt["currents"]
@@ -449,7 +519,7 @@ class LumesJigApp(ctk.CTk):
         mask = pkt.get("relay_mask", 0)
         
         row = [index, f"{ts:.1f}"]
-        errs = []
+        errs = []; touts = []; csums = []
         
         # V
         row.append(f"{v:.2f}")
@@ -457,15 +527,34 @@ class LumesJigApp(ctk.CTk):
         for r in range(3):
             status = JigProtocol.row_status(mask, channel, r, cs[r], ps[r])
             row.append(f"{cs[r]:.1f}")
-            if status in ('fail_low', 'fail_leak'): errs.append(len(row)-1)
+            comm_stat = pkt.get("comm_err", 0)
+            
+            if comm_stat == 1: # TIMEOUT
+                touts.append(len(row)-1)
+            elif comm_stat == 2: # CHECKSUM
+                csums.append(len(row)-1)
+            elif status in ('fail_low', 'fail_leak'): 
+                errs.append(len(row)-1)
+                
             row.append(f"{ps[r]:.2f}")
-            if status in ('fail_low', 'fail_leak'): errs.append(len(row)-1)
-        # G
+            if comm_stat == 1:
+                touts.append(len(row)-1)
+            elif comm_stat == 2:
+                csums.append(len(row)-1)
+            elif status in ('fail_low', 'fail_leak'): 
+                errs.append(len(row)-1)
+        
+        # Voltage error?
+        row[2] = f"{v:.2f}"
+        comm_stat = pkt.get("comm_err", 0)
+        if comm_stat == 1:   touts.append(2)
+        elif comm_stat == 2: csums.append(2)
+            
         row.append(f"0x{g:06X}")
         if v > 50.0 and (g & 0xFFFF00) != GAIN_EXPECTED:
             errs.append(len(row)-1)
 
-        return row, errs
+        return row, errs, touts, csums
 
     # ── System Logs Tab ────────────────────────────
     def _build_syslog_tab(self):
@@ -532,7 +621,8 @@ class LumesJigApp(ctk.CTk):
                 "currents": [500.0 + random.uniform(-5, 5) for _ in range(3)],
                 "powers":   [110.0 + random.uniform(-2, 2) for _ in range(3)],
                 "gain":     0x333300,
-                "relay_mask": 0b111000111000
+                "mask":     0b111000111000,
+                "comm_err": 0
             }
             self._on_ch_data_frame(mock_pkt)
             self.update()
@@ -574,12 +664,29 @@ class LumesJigApp(ctk.CTk):
             self.after(0, lambda p=pkt: self._on_ch_data_frame(p))
         elif t == "summary":
             self.after(0, lambda p=pkt: self._on_summary_frame(p))
+        elif t == "error":
+            ch = pkt.get("channel", 0) + 1
+            err_type = pkt.get("err", 0)
+            err_msg = "TIMEOUT" if err_type == 1 else "CHECKSUM"
+            msg = f"!!! COMM ERROR: Channel {ch} - BL0906 {err_msg} !!!"
+            self.after(0, lambda m=msg: self._sys_log(m))
+        elif t == "eeprom_error":
+            ch = pkt.get("channel", 0) + 1
+            stat = pkt.get("status", 0)
+            if stat == 1:
+                msg = f"EEPROM Channel {ch}: WRITTEN & VERIFIED (PASS)"
+            elif stat == 2:
+                msg = f"!!! EEPROM ERROR: Channel {ch} - TIMEOUT !!!"
+            else:
+                msg = f"!!! EEPROM ERROR: Channel {ch} - WRONG DATA (Verify Fail) !!!"
+            self.after(0, lambda m=msg: self._sys_log(m))
 
     # ──────────────────────────────────────────────
     # Session lifecycle
     # ──────────────────────────────────────────────
     def _on_test_start(self):
         self._session_frames.clear()
+        self._last_summary  = None
         self._in_session    = True
         self._session_start = time.time()
         self._session_badge.configure(text="▶ RECORDING")
@@ -598,50 +705,87 @@ class LumesJigApp(ctk.CTk):
 
     def _on_summary_frame(self, pkt):
         """Update the CALIBRATION tab with detailed results."""
-        self._tabs.set("CALIBRATION")
-        for ch in range(4):
-            card = self._summary_cards[ch]
-            
-            # ZCD, Calib Range, EEPROM
-            z_ok = pkt["zcd_ok"][ch] == 1
-            z_val = pkt.get("zcd_counts", [0,0,0,0])[ch]
-            c_ok = pkt["calib_ok"][ch] == 1
-            e_ok = pkt["eeprom_ok"][ch] == 1
-            
-            z_txt = f"{'PASS' if z_ok else 'FAIL'} ({z_val})"
-            card["checks"]["Zero Detect"].configure(text=z_txt, text_color="#00ff88" if z_ok else "#ff4444")
-            card["checks"]["Calibration Range"].configure(text="PASS" if c_ok else "FAIL", text_color="#00ff88" if c_ok else "#ff4444")
-            card["checks"]["EEPROM Write"].configure(text="PASS" if e_ok else "FAIL", text_color="#00ff88" if e_ok else "#ff4444")
-            
-            # Relays
-            all_r_ok = True
-            for r in range(3):
-                idx = ch * 3 + r
-                r_ok = pkt["relay_ok"][idx] == 1
-                if not r_ok: all_r_ok = False
-                card["relays"][r].configure(text="OK" if r_ok else "FAIL", text_color="#00ff88" if r_ok else "#ff4444")
-            
-            # Final Status
-            overall = z_ok and c_ok and e_ok and all_r_ok
-            card["header"].configure(text="[ PASS ]" if overall else "[ FAIL ]", text_color="#00ff88" if overall else "#ff4444")
-            
-            # Calibration Table (K-factors & Counts)
-            k_box = card["k_box"]
-            k_box.configure(state="normal")
-            k_box.delete("1.0", "end")
-            
-            k_box.insert("end", f"K-Voltage: {pkt['k_u'][ch]:<8} (Count: {pkt['cnt_u'][ch]})\n")
-            line_i = "K-Current: "
-            line_p = "K-Power:   "
-            line_c = "Counts I:  "
-            for r in range(3):
-                idx = ch * 3 + r
-                line_i += f"{REL_NAMES[r]}:{pkt['k_i'][idx]:<6} "
-                line_p += f"{REL_NAMES[r]}:{pkt['k_p'][idx]:<6} "
-                line_c += f"{REL_NAMES[r]}:{pkt['cnt_i'][idx]:<6} "
-            
-            k_box.insert("end", line_i + "\n" + line_p + "\n" + line_c)
-            k_box.configure(state="disabled")
+        self._last_summary = pkt
+        try:
+            # self._tabs.set("CALIBRATION") # Bo dong nay de tranh tu nhay tab
+            for ch in range(4):
+                card = self._summary_cards[ch]
+                
+                # ZCD, Calib Range, EEPROM
+                z_oks  = pkt.get("zcd_ok", [0,0,0,0])
+                z_ok   = z_oks[ch] == 1 if ch < len(z_oks) else False
+                
+                z_vals = pkt.get("zcd_counts", [0,0,0,0])
+                z_val  = z_vals[ch] if ch < len(z_vals) else 0
+                
+                e_oks  = pkt.get("eeprom_ok", [0,0,0,0])
+                e_ok   = e_oks[ch] == 1 if ch < len(e_oks) else False
+                
+                # evaluate calibration per relay
+                kus = pkt.get('k_u', [1000,1000,1000,1000])
+                ku  = kus[ch] if ch < len(kus) else 1000
+                v_cal_ok = (850 <= ku <= 1150)
+                
+                ki_list = pkt.get('k_i', [1000]*12)
+                kp_list = pkt.get('k_p', [1000]*12)
+                r_oks   = pkt.get('relay_ok', [0]*12)
+                
+                relays_cal_ok = []
+                for r in range(3):
+                    idx = ch * 3 + r
+                    ki = ki_list[idx] if idx < len(ki_list) else 1000
+                    kp = kp_list[idx] if idx < len(kp_list) else 1000
+                    
+                    rel_ok = v_cal_ok and (850 <= ki <= 1150) and (850 <= kp <= 1150)
+                    relays_cal_ok.append(rel_ok)
+                    
+                    lbl_name = f"Calib Relay {REL_NAMES[r]}"
+                    if lbl_name in card["checks"]:
+                        card["checks"][lbl_name].configure(
+                            text="PASS" if rel_ok else "FAIL", 
+                            text_color="#00ff88" if rel_ok else "#ff4444"
+                        )
+                
+                ch_cal_ok = all(relays_cal_ok)
+                
+                z_txt = f"{'PASS' if z_ok else 'FAIL'} ({z_val})"
+                card["checks"]["Zero Detect"].configure(text=z_txt, text_color="#00ff88" if z_ok else "#ff4444")
+                card["checks"]["EEPROM Write"].configure(text="PASS" if e_ok else "FAIL", text_color="#00ff88" if e_ok else "#ff4444")
+                
+                all_r_ok = True
+                for r in range(3):
+                    idx = ch * 3 + r
+                    r_ok = r_oks[idx] == 1 if idx < len(r_oks) else False
+                    if not r_ok: all_r_ok = False
+                    card["relays"][r].configure(text="OK" if r_ok else "FAIL", text_color="#00ff88" if r_ok else "#ff4444")
+                
+                overall = z_ok and ch_cal_ok and e_ok and all_r_ok
+                card["header"].configure(text="[ PASS ]" if overall else "[ FAIL ]", text_color="#00ff88" if overall else "#ff4444")
+                
+                k_box = card["k_box"]
+                k_box.configure(state="normal")
+                k_box.delete("1.0", "end")
+                
+                v_status = "OK" if v_cal_ok else "ERR"
+                cnt_u_list = pkt.get('cnt_u', [0]*4)
+                cnt_u = cnt_u_list[ch] if ch < len(cnt_u_list) else 0
+                k_box.insert("end", f"K-Voltage: {ku:<8} ({v_status}) | Count: {cnt_u}\n")
+                
+                cnt_i_list = pkt.get('cnt_i', [0]*12)
+                for r in range(3):
+                    idx = ch * 3 + r
+                    ki = ki_list[idx] if idx < len(ki_list) else 1000
+                    kp = kp_list[idx] if idx < len(kp_list) else 1000
+                    cnt_i = cnt_i_list[idx] if idx < len(cnt_i_list) else 0
+                    
+                    i_st = "OK" if (850 <= ki <= 1150) else "ERR"
+                    p_st = "OK" if (850 <= kp <= 1150) else "ERR"
+                    line = f"Relay {REL_NAMES[r]} -> K-I: {ki:<5} ({i_st}), K-P: {kp:<5} ({p_st}), Cnt: {cnt_i}\n"
+                    k_box.insert("end", line)
+                
+                k_box.configure(state="disabled")
+        except Exception as e:
+            self._sys_log(f"SUMMARY DISPLAY ERROR: {e}")
 
     def _on_test_end(self):
         self._in_session = False
@@ -649,6 +793,7 @@ class LumesJigApp(ctk.CTk):
         duration = time.time() - self._session_start
         session = {
             "frames":    list(self._session_frames),
+            "summary":   self._last_summary,
             "timestamp": time.strftime("%H:%M:%S"),
             "duration":  duration,
         }
@@ -701,8 +846,8 @@ class LumesJigApp(ctk.CTk):
         n = len(self._session_frames)
         pkt["ts_offset"] = ts
         ch = pkt["channel"]
-        row, errs = self._format_frame_row(pkt, n, ts, ch)
-        self._log_tables[ch].append_row(row, errs)
+        row, errs, touts, csums = self._format_frame_row(pkt, n, ts, ch)
+        self._log_tables[ch].append_row(row, errs, touts, csums)
 
     def _clear_log(self):
         for tbl in self._log_tables:
@@ -745,8 +890,8 @@ class LumesJigApp(ctk.CTk):
         for i, pkt in enumerate(frames):
             ts = pkt.get("ts_offset", 0)
             ch = pkt["channel"]
-            row, errs = self._format_frame_row(pkt, i, ts, ch)
-            self._log_tables[ch].append_row(row, errs)
+            row, errs, touts, csums = self._format_frame_row(pkt, i, ts, ch)
+            self._log_tables[ch].append_row(row, errs, touts, csums)
 
     def _on_zoom_v(self, val):
         sz = int(float(val))

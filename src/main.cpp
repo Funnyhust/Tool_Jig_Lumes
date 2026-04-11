@@ -118,11 +118,13 @@ void loop() {
   // }
 
   if (millis() - time_end_process >= 30000) {
-    relayService.turnOffAll();
-    UART_DEBUG.println("30s timeout, turn off all relays");
+    process_stop_all();
+    UART_DEBUG.println("30s timeout, all alerts stopped.");
   }
   if (UART_DEBUG.available()) {
     uint8_t data = UART_DEBUG.read();
     write_memory_process(data);
   }
+
+  process_handle_blinks();
 }
